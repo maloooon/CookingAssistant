@@ -16,8 +16,9 @@ def create_groceries_database():
     cursor.execute("DROP TABLE IF EXISTS groceries")
     cursor.execute("DROP TABLE IF EXISTS home")
     cursor.execute("DROP TABLE IF EXISTS grocerylist")
+    cursor.execute("DROP TABLE IF EXISTS recipes")
 
-    
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS groceries (
             id INTEGER PRIMARY KEY,
@@ -45,6 +46,15 @@ def create_groceries_database():
             price REAL NOT NULL
         )
     ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS recipes (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            ingredients TEXT NOT NULL
+        )
+    ''')
+
 
 
     # Commit changes and close connection

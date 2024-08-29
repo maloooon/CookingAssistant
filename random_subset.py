@@ -31,7 +31,7 @@ def create_random_csv_subset(input_file, output_file, subset_size):
         print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    input_file = 'tesco_groceries_dataset.csv'
+    input_file = 'ingredients.csv'
     output_file = 'home_items.csv'
-    subset_size = 100  # Specify the number of rows you want in your subset
+    subset_size = 25  # Specify the number of rows you want in your subset
     create_random_csv_subset(input_file, output_file, subset_size)
