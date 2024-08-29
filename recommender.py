@@ -63,6 +63,11 @@ class RecipeRecommender:
         # Return the names and similarity scores of the top N recipes
         return recommended_recipes[['name', 'similarity']]
 
+
+
+    # TODO : right now recipes via categories, so e.g. just tomatoes, while we can have different tomato types in the ingredients table with different prices
+    # TODO : Thus, either make categories more strict (different tomato types) or give an average cost (of the different tomato types ; but then again we need to normalize based on how much gram it is)
+    # TODO : or choose specific ingredients based on the persons liking or the recipe and calculate on that (<- best option)
     def calculate_recipe_cost(self, recipe_id):
         # Fetch ingredients for the given recipe
         self.cursor.execute("SELECT ingredients FROM recipes WHERE id = ?", (recipe_id,))
