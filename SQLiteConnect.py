@@ -13,10 +13,11 @@ def create_groceries_database():
     # price: Price of the grocery item
 
     # Drop existing tables
-    cursor.execute("DROP TABLE IF EXISTS groceries")
-    cursor.execute("DROP TABLE IF EXISTS home")
-    cursor.execute("DROP TABLE IF EXISTS grocerylist")
-    cursor.execute("DROP TABLE IF EXISTS recipes")
+  #  cursor.execute("DROP TABLE IF EXISTS groceries")
+  #  cursor.execute("DROP TABLE IF EXISTS home")
+  #  cursor.execute("DROP TABLE IF EXISTS grocerylist")
+  #  cursor.execute("DROP TABLE IF EXISTS recipes")
+    cursor.execute("DROP TABLE IF EXISTS chosenforrecipe")
 
 
     cursor.execute('''
@@ -32,7 +33,8 @@ def create_groceries_database():
         CREATE TABLE IF NOT EXISTS home (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
-            category TEXT NOT NULL
+            category TEXT NOT NULL,
+            price REAL NOT NULL
 
         )
     ''')
@@ -52,6 +54,16 @@ def create_groceries_database():
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             ingredients TEXT NOT NULL
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS chosenforrecipe (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            price REAL NOT NULL,
+            athome BOOL NOT NULL
         )
     ''')
 
@@ -137,6 +149,20 @@ def display_all_home():
     print("\nAll Items at Home:")
     for grocery in groceries:
         print(f"ID: {grocery[0]}, Name: {grocery[1]}, Category: {grocery[2]}")
+
+    conn.close()
+
+def display_all_recipes():
+    conn = sqlite3.connect('groceries.db')
+    cursor = conn.cursor()
+
+    # Query and display all groceries
+    cursor.execute('SELECT * FROM recipes')
+    groceries = cursor.fetchall()
+
+    print("\nAll Recipes:")
+    for grocery in groceries:
+        print(f"ID: {grocery[0]}, Name: {grocery[1]}, Ingredients: {grocery[2]}")
 
     conn.close()
 
