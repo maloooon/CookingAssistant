@@ -100,6 +100,38 @@ class RecipeRecommender:
         # Clear all entries from the 'chosenforrecipe' table
         self.cursor.execute("DELETE FROM chosenforrecipe")
         self.conn.commit()
+    
+    def add_to_shopping_list(self):
+        try:
+            # Fetch items that are not at home from chosenforrecipe
+            self.cursor.execute("SELECT name, category, price FROM chosenforrecipe WHERE athome = 0")
+            items_to_buy = self.cursor.fetchall()
+
+            if not items_to_buy:
+                print("No items need to be added to the shopping list.")
+                return
+
+            # Use executemany for better performance
+            self.cursor.executemany(
+                "INSERT OR IGNORE INTO shoppinglist (name, category, price) VALUES (?, ?, ?)",
+                items_to_buy
+            )
+
+            self.conn.commit()
+            print(f"Added {self.cursor.rowcount} item(s) to the shopping list.")
+
+        except sqlite3.Error as e:
+            print(f"An error occurred: {e}")
+            self.conn.rollback()
+
+    def add_to_cooked_recipes(self, recipe_id):
+        # Add a recipe to the 'cookedrecipes' table
+        self.cursor.execute("SELECT name FROM recipes where id = ?", (int(recipe_id),))
+        recipe_name = self.cursor.fetchone()[0]
+        self.cursor.execute("INSERT INTO cookedrecipes (name) VALUES (?)", (recipe_name,))
+        self.conn.commit()
+
+
 
     def interactive_recipe_selection(self):
         # Get the top 5 recommended recipes
@@ -155,10 +187,23 @@ class RecipeRecommender:
             else:
                 print(f"Warning: No options found for {ingredient}")
 
+
         # Calculate and display both prices
         total_price, to_buy_price = self.get_total_prices()
         print(f"\nTotal price for the recipe (including items at home): ${total_price:.2f}")
         print(f"Price for items you need to buy: ${to_buy_price:.2f}")
+
+        choice = input("Would you like to make this recipe? In this case, the items you need to buy will be added to your shopping list. (yes/no): ")
+        if choice.lower() == 'yes':
+            # Add items to the shopping list that are not at home
+            self.add_to_shopping_list()
+            # Furthermore, add the recipe into the table 'cookedrecipes'
+            self.add_to_cooked_recipes(recipe_id)
+            
+        else:
+            print("No items were added to the shopping list.")
+        # Clear ingredients in chosen for recipe
+        self.clear_chosen_for_recipe()
 
     def close_connection(self):
         # Close the database connection
