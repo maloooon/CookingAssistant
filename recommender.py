@@ -62,6 +62,17 @@ class RecipeRecommender:
 
         # Return the ids, names and similarity scores of the top N recipes
         return recommended_recipes[['id', 'name', 'similarity']]
+    
+
+    def get_home_ingredient_amount(self, name):
+        self.cursor.execute("SELECT amount FROM home WHERE name = ?", (name,))
+        result = self.cursor.fetchone()
+        return result[0] if result else "0g"
+
+    def get_grocery_item_amount(self, name):
+        self.cursor.execute("SELECT amount FROM groceries WHERE name = ?", (name,))
+        result = self.cursor.fetchone()
+        return result[0] if result else "0g"
 
     def get_recipe_ingredients(self, recipe_id):
         # Fetch ingredients for a specific recipe
@@ -70,12 +81,12 @@ class RecipeRecommender:
     
     def get_home_ingredients_by_category(self, category):
         # Fetch all home ingredients of a specific category
-        self.cursor.execute("SELECT name, price FROM home WHERE category = ?", (category,))
+        self.cursor.execute("SELECT name, price, amount FROM home WHERE category = ?", (category,))
         return self.cursor.fetchall()
 
     def get_grocery_items_by_category(self, category):
         # Fetch all grocery items of a specific category
-        self.cursor.execute("SELECT id, name, price FROM groceries WHERE category = ?", (category,))
+        self.cursor.execute("SELECT id, name, price, amount FROM groceries WHERE category = ?", (category,))
         return self.cursor.fetchall()
 
     def add_to_chosen_for_recipe(self, name, category, price, athome):
@@ -130,6 +141,21 @@ class RecipeRecommender:
         recipe_name = self.cursor.fetchone()[0]
         self.cursor.execute("INSERT INTO cookedrecipes (name) VALUES (?)", (recipe_name,))
         self.conn.commit()
+
+    def get_recipe_amounts(self, recipe_id):
+        self.cursor.execute("SELECT ingredients, amount FROM recipes WHERE id = ?", (int(recipe_id),))
+        result = self.cursor.fetchone()
+        print(result)
+        if result:
+            ingredients = result[0].split(' ')
+            amounts = result[1].split(' ')
+            return dict(zip(ingredients, amounts)) 
+        return {}
+
+    def get_home_ingredient_amount(self, ingredient):
+        self.cursor.execute("SELECT amount FROM home WHERE name = ?", (ingredient,))
+        result = self.cursor.fetchone()
+        return result[0] if result else "0" 
 
 
 

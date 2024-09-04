@@ -1,21 +1,21 @@
-name,ingredients
-Spaghetti Bolognese,pasta ground_meat tomatoes onions garlic cooking_oils herbs
-Chicken Stir Fry,poultry bell_peppers root_vegetables cruciferous_vegetables asian_sauces ginger garlic long_grain_rice
-Vegetable Curry,potatoes cruciferous_vegetables root_vegetables frozen_vegetables cooking_oils curry_powder onions garlic long_grain_rice
-Caesar Salad,lettuce baking_goods parmesan_cheese sauces poultry
-Mushroom Risotto,risotto_rice mushrooms onions garlic cooking_oils vegetable_broth parmesan_cheese
-Beef Tacos,ground_meat flatbread lettuce tomatoes cheddar_cheese cultured_cream condiments
-Greek Salad,cucumbers tomatoes onions feta_cheese cooking_oils citrus_fruits herbs
-Vegetable Lasagna,pasta summer_squash leafy_greens ricotta_cheese mozzarella_cheese tomatoes
-Grilled Salmon,fish citrus_fruits herbs cooking_oils garlic
-Chicken Parmesan,poultry baking_goods parmesan_cheese mozzarella_cheese tomatoes pasta
-Beef Stir Fry,beef_cuts cruciferous_vegetables root_vegetables onions asian_sauces ginger garlic long_grain_rice
-Caprese Salad,tomatoes mozzarella_cheese herbs cooking_oils vinegars
-Vegetable Soup,root_vegetables celery onions potatoes tomatoes vegetable_broth herbs
-Shrimp Scampi,shellfish pasta garlic butter cooking_oils citrus_fruits herbs
-Beef Stroganoff,beef_cuts mushrooms onions cultured_cream beef_broth egg_pasta
-Vegetable Fried Rice,long_grain_rice root_vegetables frozen_vegetables onions eggs asian_sauces garlic ginger
-Chicken Fajitas,poultry bell_peppers onions flatbread cultured_cream cheddar_cheese condiments
-Eggplant Parmesan,eggplant tomatoes mozzarella_cheese parmesan_cheese herbs
-Tuna Salad,canned_fish condiments celery onions citrus_fruits
-Spinach and Feta Quiche,eggs leafy_greens feta_cheese onions baking_goods milk
+name,ingredients,amount,persons
+Spaghetti Bolognese,pasta ground_meat tomatoes onions garlic cooking_oils herbs,200g 250g 400g 100g 10g 30ml 5g,2
+Chicken Stir Fry,poultry bell_peppers root_vegetables cruciferous_vegetables asian_sauces ginger garlic long_grain_rice,300g 200g 150g 150g 50ml 10g 10g 150g,2
+Vegetable Curry,potatoes cruciferous_vegetables root_vegetables frozen_vegetables cooking_oils curry_powder onions garlic long_grain_rice,200g 150g 150g 100g 30ml 15g 100g 10g 150g,2
+Caesar Salad,lettuce baking_goods parmesan_cheese sauces poultry,200g 50g 50g 50ml 150g,2
+Mushroom Risotto,risotto_rice mushrooms onions garlic cooking_oils vegetable_broth parmesan_cheese,200g 200g 100g 10g 30ml 500ml 50g,2
+Beef Tacos,ground_meat flatbread lettuce tomatoes cheddar_cheese cultured_cream condiments,250g 4pcs 100g 100g 50g 50ml 30g,2
+Greek Salad,cucumbers tomatoes onions feta_cheese cooking_oils citrus_fruits herbs,200g 200g 50g 100g 30ml 50ml 5g,2
+Vegetable Lasagna,pasta summer_squash leafy_greens ricotta_cheese mozzarella_cheese tomatoes,250g 200g 100g 200g 150g 300g,2
+Grilled Salmon,fish citrus_fruits herbs cooking_oils garlic,300g 50ml 5g 20ml 10g,2
+Chicken Parmesan,poultry baking_goods parmesan_cheese mozzarella_cheese tomatoes pasta,300g 50g 50g 100g 200g 200g,2
+Beef Stir Fry,beef_cuts cruciferous_vegetables root_vegetables onions asian_sauces ginger garlic long_grain_rice,300g 200g 150g 100g 50ml 10g 10g 150g,2
+Caprese Salad,tomatoes mozzarella_cheese herbs cooking_oils vinegars,300g 200g 10g 30ml 15ml,2
+Vegetable Soup,root_vegetables celery onions potatoes tomatoes vegetable_broth herbs,200g 100g 100g 200g 200g 1L 5g,2
+Shrimp Scampi,shellfish pasta garlic butter cooking_oils citrus_fruits herbs,250g 200g 15g 30g 30ml 30ml 5g,2
+Beef Stroganoff,beef_cuts mushrooms onions cultured_cream beef_broth egg_pasta,300g 200g 100g 200ml 250ml 200g,2
+Vegetable Fried Rice,long_grain_rice root_vegetables frozen_vegetables onions eggs asian_sauces garlic ginger,200g 150g 100g 100g 2pcs 50ml 10g 10g,2
+Chicken Fajitas,poultry bell_peppers onions flatbread cultured_cream cheddar_cheese condiments,300g 200g 100g 4pcs 50ml 50g 30g,2
+Eggplant Parmesan,eggplant tomatoes mozzarella_cheese parmesan_cheese herbs,300g 200g 150g 50g 5g,2
+Tuna Salad,canned_fish condiments celery onions citrus_fruits,200g 50g 100g 50g 30ml,2
+Spinach and Feta Quiche,eggs leafy_greens feta_cheese onions baking_goods milk,4pcs 200g 100g 100g 150g 200ml,2

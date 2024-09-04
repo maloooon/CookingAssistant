@@ -1,26 +1,26 @@
-name,category,price
-fresh pineapple,tropical_fruits,4.0
-guacamole dip,dips,4.25
-red grapes bunch,grapes,3.0
-russet potatoes,potatoes,1.6
-organic penne rigate,pasta,2.75
-organic ketchup,condiments,2.8
-wild caught salmon fillet,fish,9.5
-pure maple syrup,sweeteners,7.0
-aged balsamic vinegar,vinegars,5.5
-quinoa,ancient_grain,5.0
-fennel bulb,aromatic_vegetables,2.5
-boneless chicken breasts,poultry,4.75
-yellow onions,onions,1.0
-golden beets bunch,root_vegetables,2.25
-stevia sweetener,sugar_alternatives,5.0
-green zucchini,summer_squash,1.75
-asparagus bunch,asparagus,3.5
-fresh lasagna sheets,pasta,3.5
-ripe avocados,avocados,2.5
-jumbo shrimp,shellfish,12.0
-Greek yogurt,yogurt,3.0
-real mayonnaise,condiments,3.25
-virgin coconut oil,cooking_oils,7.0
-Bartlett pears,pears,2.25
-Italian plums,stone_fruits,2.2
+name,category,price,amount
+fresh pineapple,tropical_fruits,4.0,1 kg
+guacamole dip,dips,4.25,250 g
+red grapes bunch,grapes,3.0,500 g
+russet potatoes,potatoes,1.6,2 kg
+organic penne rigate,pasta,2.75,500 g
+organic ketchup,condiments,2.8,500 ml
+wild caught salmon fillet,fish,9.5,400 g
+pure maple syrup,sweeteners,7.0,250 ml
+aged balsamic vinegar,vinegars,5.5,250 ml
+quinoa,ancient_grain,5.0,500 g
+fennel bulb,aromatic_vegetables,2.5,300 g
+boneless chicken breasts,poultry,4.75,600 g
+yellow onions,onions,1.0,1 kg
+golden beets bunch,root_vegetables,2.25,500 g
+stevia sweetener,sugar_alternatives,5.0,100 g
+green zucchini,summer_squash,1.75,400 g
+asparagus bunch,asparagus,3.5,300 g
+fresh lasagna sheets,pasta,3.5,400 g
+ripe avocados,avocados,2.5,2 pieces
+jumbo shrimp,shellfish,12.0,500 g
+Greek yogurt,yogurt,3.0,500 g
+real mayonnaise,condiments,3.25,400 ml
+virgin coconut oil,cooking_oils,7.0,500 ml
+Bartlett pears,pears,2.25,4 pieces
+Italian plums,stone_fruits,2.2,500 g

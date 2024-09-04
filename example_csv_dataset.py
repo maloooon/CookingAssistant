@@ -124,16 +124,16 @@ def load_csv_to_recipes(csv_file_path, columns_to_import):
 
 if __name__ == "__main__":
 
-  #  csv_file_path = 'ingredients.csv'
-   # columns_to_import = ['name', 'price', 'category']  
-  #  load_csv_to_groceries(csv_file_path, columns_to_import)
+    csv_file_path = 'ingredients.csv'
+    columns_to_import = ['name', 'price', 'category', 'amount']  
+    load_csv_to_groceries(csv_file_path, columns_to_import)
 
-    csv_file_path = 'home_items.csv'
-    columns_to_import = ['name', 'price', 'category']
-    load_csv_to_home(csv_file_path, columns_to_import)
+   # csv_file_path = 'home_items.csv'
+   # columns_to_import = ['name', 'price', 'category', 'amount']
+   # load_csv_to_home(csv_file_path, columns_to_import)
 
         
-  #  csv_file_path = 'recipes.csv'
-  #  columns_to_import = ['name', 'ingredients']
-  #  load_csv_to_recipes(csv_file_path, columns_to_import)
+   # csv_file_path = 'recipes.csv'
+   # columns_to_import = ['name', 'ingredients', 'amount', 'persons']
+   # load_csv_to_recipes(csv_file_path, columns_to_import)
 
