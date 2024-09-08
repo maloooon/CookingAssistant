@@ -67,13 +67,16 @@ def process_recipe(recipe_content, word_to_category):
 def format_as_single_word(text):
     return re.sub(r'\s+', '_', text.strip())
 
+def format_as_single_word_amounts(text):
+    return re.sub(r'\s+', '', text.strip())
+
 def insert_recipe_to_db(db_path, recipe_name, original_ingredients, mapped_ingredients, amounts, servings):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
 
     formatted_original = ' '.join(format_as_single_word(ing) for ing in original_ingredients)
-    formatted_amounts = ' '.join(format_as_single_word(amt) if amt != 'N/A' else amt for amt in amounts)
+    formatted_amounts = ' '.join(format_as_single_word_amounts(amt) if amt != 'N/A' else amt for amt in amounts)
 
     recipe_data = (
         recipe_name,

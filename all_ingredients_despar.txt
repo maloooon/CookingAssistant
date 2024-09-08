@@ -1,0 +1,13 @@
+FALSE
+SELEX Pesto con Pomodori Secchi e Pistacchio, pesto, 2.45, 190g
+BARILLA Pesto Ricotta e Noci, pesto, 2.55, 190g
+Parmiggiano Reggiano D.O.P 30 mesi, parmesan, 7.29, 250g
+Pomodori Datterino, tomato, 1.99, 300g
+Salsa di Soia, soja_sauce, 3.05, 150ml
+Cetrioli, cucumber, 0.45, 1piece
+Latte intero, milk, 1l 
+Yogurt Greco 0% , greek_yogurt, 2.79, 250g 
+Studentfruit, nuts, 4.49, 200g
+Miele, honey, 3.78, 300g 
+Bagnoli, blueberry, 1.99, 200g
+SANTA LUCIA Mozzarella, mozzarella, 1.79, 125g

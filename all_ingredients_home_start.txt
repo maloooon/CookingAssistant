@@ -1,0 +1,15 @@
+TRUE 
+Cous Cous grana media , cous_cous, 0, 250g
+Riso Nero Integrale, black_rice, 0, 450g
+Puccia, puccia, 0, 4pieces 
+Pepe nero, pepper, 0, N 
+Pepe bianco, pepper, 0, N 
+Peperoncino, peperoncino_spice, 0, N 
+Olio vergine di olive, olive_oil, 0, N 
+Aglio, garlic, 0, 10pieces 
+Rice Vinegar, rice_vinegar, 0, N 
+Parmiggiano Reggiano D.O.P 30 mesi, parmesan, 7.29, 125g
+Pomodori Datterino, tomato, 1.99, 300g
+Pepperoni, paprika, 0, 1piece
+SELEX Pesto con Pomodori Secchi e Pistacchio, pesto, 2.45, 100g
+BARILLA Pesto Ricotta e Noci, pesto, 2.55, 40g
