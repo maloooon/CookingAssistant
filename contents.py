@@ -1,7 +1,9 @@
 import sys
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-                             QListWidget, QMessageBox, QDialog, QRadioButton, QButtonGroup, QScrollArea, QGroupBox, QTableWidget, QTableWidgetItem)
-from PyQt5.QtCore import Qt
+                             QListWidget, QMessageBox, QDialog, QRadioButton, QButtonGroup, QScrollArea, QGroupBox, 
+                             QTableWidget, QTableWidgetItem, QLineEdit, QListView)
+from PyQt5.QtCore import Qt, QSortFilterProxyModel
+from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
 from recommender import RecipeRecommender  
 from amount_comparison import compare_amounts, extract_value_and_unit, convert_to_common_unit, is_enough_ingredient
@@ -52,6 +54,10 @@ class RecipeRecommenderGUI(QMainWindow):
         button_layout.addWidget(exit_button)
 
         main_layout.addLayout(button_layout)
+
+        cooking_button = QPushButton('Cooking...')
+        cooking_button.clicked.connect(self.open_cooking_dialog)
+        button_layout.addWidget(cooking_button)
 
     def show_recommendations(self):
         recommendations = self.recommender.recommend_recipes()
@@ -105,6 +111,11 @@ class RecipeRecommenderGUI(QMainWindow):
         dialog.exec_()
 
 
+    def open_cooking_dialog(self):
+        dialog = CookingDialog(self.recommender)
+        dialog.exec_()
+
+
     def show_shopping_list(self):
         self.recommender.cursor.execute("SELECT name, category, price FROM shoppinglist")
         shopping_list = self.recommender.cursor.fetchall()
@@ -151,6 +162,78 @@ class RecipeRecommenderGUI(QMainWindow):
                                              QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
                 if reply == QMessageBox.Yes:
                     return  # Go back to selection
+                
+
+
+class CookingDialog(QDialog):
+    def __init__(self, recommender):
+        super().__init__()
+        self.recommender = recommender
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle('What did you cook?')
+        self.setGeometry(200, 200, 400, 300)
+
+        layout = QVBoxLayout(self)
+
+        # Search bar
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search for recipes...")
+        self.search_bar.textChanged.connect(self.update_search_results)
+        layout.addWidget(self.search_bar)
+
+        # List view for search results
+        self.list_view = QListView()
+        self.model = QStandardItemModel()
+        self.proxy_model = QSortFilterProxyModel()
+        self.proxy_model.setSourceModel(self.model)
+        self.proxy_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self.list_view.setModel(self.proxy_model)
+        layout.addWidget(self.list_view)
+
+        # Populate the model with all recipes
+        self.populate_recipes()
+
+        # Select button
+        select_button = QPushButton('Select Recipe')
+        select_button.clicked.connect(self.select_recipe)
+        layout.addWidget(select_button)
+
+    def populate_recipes(self):
+        recipes = self.recommender.get_recipes()
+        for recipe in recipes:
+            item = QStandardItem(recipe[1])  # Assuming recipe[1] is the name
+            item.setData(recipe[0], Qt.UserRole)  # Store the recipe ID
+            self.model.appendRow(item)
+
+    def update_search_results(self, text):
+        self.proxy_model.setFilterRegExp(f"\\b{text}")
+
+    def select_recipe(self):
+        selected_indexes = self.list_view.selectedIndexes()
+        if selected_indexes:
+            proxy_index = selected_indexes[0]
+            source_index = self.proxy_model.mapToSource(proxy_index)
+            selected_item = self.model.itemFromIndex(source_index)
+            
+            recipe_name = selected_item.text()
+            recipe_id = selected_item.data(Qt.UserRole)
+            
+            reply = QMessageBox.question(self, 'Confirm Cooking', 
+                                         f"Did you cook {recipe_name}?",
+                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            
+            if reply == QMessageBox.Yes:
+                self.recommender.add_to_cooked_recipes(recipe_id)
+                self.recommender.update_home_ingredients(recipe_id)
+                QMessageBox.information(self, 'Success', f'{recipe_name} has been added to your cooked recipes and home ingredients have been updated.')
+                self.accept()
+            else:
+                QMessageBox.information(self, 'Cancelled', 'No recipe was added to cooked recipes.')
+        else:
+            QMessageBox.warning(self, 'No Selection', 'Please select a recipe first.')
+
 
 
 

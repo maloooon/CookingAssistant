@@ -4,6 +4,7 @@ import sqlite3
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from amount_comparison import extract_value_and_unit, convert_to_common_unit
 
 class RecipeRecommender:
     def __init__(self, db_path):
@@ -20,6 +21,7 @@ class RecipeRecommender:
         # Fetch all recipes from the 'recipes' table
         self.cursor.execute("SELECT id, name, ingredients FROM recipes")
         return self.cursor.fetchall()
+
 
     def prepare_recipe_data(self):
         # Prepare recipe data for content-based filtering
@@ -153,9 +155,55 @@ class RecipeRecommender:
         return {}
 
     def get_home_ingredient_amount(self, ingredient):
-        self.cursor.execute("SELECT amount FROM home WHERE name = ?", (ingredient,))
+        self.cursor.execute("SELECT amount FROM home WHERE category = ?", (ingredient,))
         result = self.cursor.fetchone()
         return result[0] if result else "0" 
+    
+
+    def get_recipe_ingredients_and_amounts(self, recipe_id):
+        self.cursor.execute("SELECT ingredients, amount FROM recipes WHERE id = ?", (recipe_id,))
+        result = self.cursor.fetchone()
+        if result:
+            ingredients = result[0].split()  # Split by whitespace
+            amounts = result[1].split()  # Split by whitespace
+            return list(zip(ingredients, amounts))
+        return []
+
+    def update_home_ingredients(self, recipe_id):
+        recipe_ingredients = self.get_recipe_ingredients_and_amounts(recipe_id)
+        for ingredient, amount in recipe_ingredients:
+            self.subtract_ingredient_from_home(ingredient, amount)
+
+    def subtract_ingredient_from_home(self, ingredient, amount):
+        self.cursor.execute("SELECT amount FROM home WHERE category = ?", (ingredient,))
+        result = self.cursor.fetchone()
+        if result:
+            home_amount = result[0]
+            new_amount = self.calculate_new_amount(home_amount, amount, subtract=True)
+            if new_amount[0] <= 0:
+                self.cursor.execute("DELETE FROM home WHERE category = ?", (ingredient,))
+            else:
+                new_amount = f"{new_amount[0]}{new_amount[1]}"
+                self.cursor.execute("UPDATE home SET amount = ? WHERE category = ?", (new_amount, ingredient))
+            self.conn.commit()
+
+    def calculate_new_amount(self, amount1, amount2, subtract=False):
+        value1, unit1 = extract_value_and_unit(amount1)
+        value2, unit2 = extract_value_and_unit(amount2)
+        
+        common_value1 = convert_to_common_unit(value1, unit1)
+        common_value2 = convert_to_common_unit(value2, unit2)
+        
+        if subtract:
+            new_value = common_value1 - common_value2
+        else:
+            new_value = common_value1 + common_value2
+        
+        return max(0, new_value), unit1 
+
+    
+
+
 
 
 

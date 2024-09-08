@@ -5,6 +5,9 @@
 # first line is title of recipe
 # second line is amount of servings (for the given amounts)
 
+
+# Note that stuff like salt is removed from the recipes, as it is assumed that it is already in the house
+
 import sqlite3
 import re
 
