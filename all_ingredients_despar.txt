@@ -11,3 +11,4 @@ Studentfruit, nuts, 4.49, 200g
 Miele, honey, 3.78, 300g 
 Bagnoli, blueberry, 1.99, 200g
 SANTA LUCIA Mozzarella, mozzarella, 1.79, 125g
+Riso Nero Integrale, black_rice, 2.99, 450g

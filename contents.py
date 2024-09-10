@@ -117,33 +117,40 @@ class RecipeRecommenderGUI(QMainWindow):
 
 
     def show_shopping_list(self):
-        self.recommender.cursor.execute("SELECT name, category, price FROM shoppinglist")
+        self.recommender.cursor.execute("SELECT name, category, price, amount, quantity FROM shoppinglist")
         shopping_list = self.recommender.cursor.fetchall()
 
         dialog = QDialog(self)
         dialog.setWindowTitle("Shopping List")
-        dialog.setGeometry(150, 150, 500, 400)
+        dialog.setGeometry(150, 150, 600, 400)
 
         layout = QVBoxLayout(dialog)
         
         table = QTableWidget()
-        table.setColumnCount(3)
-        table.setHorizontalHeaderLabels(["Name", "Category", "Price"])
+        table.setColumnCount(5)
+        table.setHorizontalHeaderLabels(["Name", "Category", "Price", "Amount", "Quantity"])
         table.setRowCount(len(shopping_list))
 
         total_price = 0
-        for row, (name, category, price) in enumerate(shopping_list):
+        for row, (name, category, price, amount, quantity) in enumerate(shopping_list):
             table.setItem(row, 0, QTableWidgetItem(name))
             table.setItem(row, 1, QTableWidgetItem(category))
+            
             price_item = QTableWidgetItem(f"${price:.2f}")
             price_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             table.setItem(row, 2, price_item)
+            
+            table.setItem(row, 3, QTableWidgetItem(amount))
+            
+            quantity_item = QTableWidgetItem(f"{quantity:.2f}")
+            quantity_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            table.setItem(row, 4, quantity_item)
+
             total_price += price
 
         table.resizeColumnsToContents()
         layout.addWidget(table)
 
-        # Add total price label
         total_label = QLabel(f"Total Price: ${total_price:.2f}")
         total_label.setAlignment(Qt.AlignRight)
         total_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-top: 10px;")
@@ -151,6 +158,24 @@ class RecipeRecommenderGUI(QMainWindow):
 
         dialog.exec_()
 
+    def get_amount_value(self, amount_str):
+        # Remove all non-numeric characters except the decimal point
+        numeric_string = ''.join(char for char in amount_str if char.isdigit() or char == '.')
+        
+        # Handle cases where there might be multiple decimal points
+        parts = numeric_string.split('.')
+        if len(parts) > 2:
+            # If there are multiple decimal points, join all parts after the first
+            numeric_string = parts[0] + '.' + ''.join(parts[1:])
+        
+        try:
+            return float(numeric_string)
+        except ValueError:
+            print(f"Warning: Could not convert '{amount_str}' to a numeric value.")
+            return 0.0
+
+
+"""
     def confirm_selection(self):
         recipe_ingredients = self.recommender.get_recipe_ingredients(self.recipe_id)
         missing_ingredients = set(recipe_ingredients) - set(self.chosen_ingredients.keys())
@@ -162,6 +187,7 @@ class RecipeRecommenderGUI(QMainWindow):
                                              QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
                 if reply == QMessageBox.Yes:
                     return  # Go back to selection
+"""
                 
 
 
@@ -237,7 +263,6 @@ class CookingDialog(QDialog):
 
 
 
-
 class IngredientSelectionDialog(QDialog):
     def __init__(self, recommender, recipe_id):
         super().__init__()
@@ -247,10 +272,9 @@ class IngredientSelectionDialog(QDialog):
         self.recipe_amounts = {}
         self.initUI()
 
-
     def initUI(self):
         self.setWindowTitle('Select Ingredients')
-        self.setGeometry(150, 150, 600, 400)
+        self.setGeometry(150, 150, 800, 600)
 
         layout = QVBoxLayout(self)
 
@@ -259,42 +283,75 @@ class IngredientSelectionDialog(QDialog):
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
 
+        confirm_button = QPushButton('Confirm Selection')
+        confirm_button.clicked.connect(self.confirm_selection)
+        layout.addWidget(confirm_button)
+
         recipe_ingredients = self.recommender.get_recipe_ingredients(self.recipe_id)
         self.recipe_amounts = self.recommender.get_recipe_amounts(self.recipe_id)
 
         for ingredient in recipe_ingredients:
             group_box = QGroupBox(ingredient)
             group_layout = QVBoxLayout()
-            button_group = QButtonGroup(self)
 
-            recipe_amount = self.recipe_amounts.get(ingredient, "0")
-
+            recipe_amount = self.recipe_amounts.get(ingredient, "0g")
             amount_label = QLabel(f"Needed: {recipe_amount}")
             group_layout.addWidget(amount_label)
 
             # Add "Choose nothing" option
             nothing_radio = QRadioButton("Choose nothing")
             nothing_radio.toggled.connect(lambda checked, ing=ingredient: 
-                                          self.on_ingredient_selected(checked, ing, None, None))
-            button_group.addButton(nothing_radio)
+                                          self.on_nothing_selected(checked, ing))
             group_layout.addWidget(nothing_radio)
 
+            # Add "At Home" options
             home_options = self.recommender.get_home_ingredients_by_category(ingredient)
             if home_options:
                 for name, price, amount in home_options:
                     radio = QRadioButton(f"{name} (${price:.2f}) (Available : {amount}) - At Home")
-                    radio.toggled.connect(lambda checked, n=name, p=price, ing=ingredient: 
-                                          self.on_ingredient_selected(checked, ing, (n, p), True))
-                    button_group.addButton(radio)
+                    radio.toggled.connect(lambda checked, n=name, p=price, a=amount, ing=ingredient: 
+                                          self.on_home_ingredient_selected(checked, ing, n, p, a))
                     group_layout.addWidget(radio)
 
+            # Add "Need to Buy" options
             grocery_options = self.recommender.get_grocery_items_by_category(ingredient)
             for id, name, price, amount in grocery_options:
-                radio = QRadioButton(f"{name} (${price:.2f}) (Amount : {amount}) - Need to Buy")
-                radio.toggled.connect(lambda checked, n=name, p=price, ing=ingredient: 
-                                      self.on_ingredient_selected(checked, ing, (n, p), False))
-                button_group.addButton(radio)
-                group_layout.addWidget(radio)
+                h_layout = QHBoxLayout()
+                label = QLabel(f"{name} (${price:.2f}) (Amount: {amount}) - Need to Buy")
+                h_layout.addWidget(label)
+                
+                minus_button = QPushButton("-")
+                minus_button.setFixedSize(30, 30)
+                minus_button.clicked.connect(lambda _, ing=ingredient, n=name, p=price, a=amount:
+                                             self.update_quantity(ing, n, p, a, -1))
+                h_layout.addWidget(minus_button)
+                
+                quantity_label = QLabel("0")
+                quantity_label.setAlignment(Qt.AlignCenter)
+                quantity_label.setFixedSize(30, 30)
+                h_layout.addWidget(quantity_label)
+                
+                plus_button = QPushButton("+")
+                plus_button.setFixedSize(30, 30)
+                plus_button.clicked.connect(lambda _, ing=ingredient, n=name, p=price, a=amount:
+                                            self.update_quantity(ing, n, p, a, 1))
+                h_layout.addWidget(plus_button)
+                
+                group_layout.addLayout(h_layout)
+                
+                if ingredient not in self.chosen_ingredients:
+                    self.chosen_ingredients[ingredient] = {}
+                self.chosen_ingredients[ingredient][name] = {
+                    'quantity_label': quantity_label,
+                    'minus_button': minus_button,
+                    'plus_button': plus_button,
+                    'quantity': 0
+                }
+
+            # Add total selected amount label
+            total_label = QLabel(f"Selected: 0{recipe_amount[-1]} / {recipe_amount}")
+            group_layout.addWidget(total_label)
+            self.chosen_ingredients[ingredient]['total_label'] = total_label
 
             group_box.setLayout(group_layout)
             scroll_layout.addWidget(group_box)
@@ -306,116 +363,121 @@ class IngredientSelectionDialog(QDialog):
         confirm_button.clicked.connect(self.confirm_selection)
         layout.addWidget(confirm_button)
 
-    def on_ingredient_selected(self, checked, ingredient, item, at_home):
+    def on_nothing_selected(self, checked, ingredient):
         if checked:
-            if item is None:  # "Choose nothing" was selected
-                self.chosen_ingredients.pop(ingredient, None)
-            else:
-                name, price = item
-                amount = self.get_amount_for_item(name, at_home)
-                needed_amount = self.recipe_amounts.get(ingredient, "0")
-                
-                difference = self.calculate_amount_difference(needed_amount, amount)
+            # Reset all selections for this ingredient
+            for item_data in self.chosen_ingredients[ingredient].values():
+                if isinstance(item_data, dict) and 'quantity_label' in item_data:
+                    item_data['quantity'] = 0
+                    item_data['quantity_label'].setText("0")
+            if 'selected' in self.chosen_ingredients[ingredient]:
+                del self.chosen_ingredients[ingredient]['selected']
+            self.update_total_amount(ingredient)
 
-                self.chosen_ingredients[ingredient] = (name, price, at_home, amount)
-                
-                if difference > 0:
-                    self.show_additional_options(ingredient, difference, at_home, name)
-                
-                
-
-    def get_amount_for_item(self, name, at_home):
-        if at_home:
-            return self.recommender.get_home_ingredient_amount(name)
+    def on_home_ingredient_selected(self, checked, ingredient, name, price, amount):
+        if checked:
+            self.chosen_ingredients[ingredient]['selected'] = (name, price, amount, True)
         else:
-            return self.recommender.get_grocery_item_amount(name)
+            if 'selected' in self.chosen_ingredients[ingredient]:
+                del self.chosen_ingredients[ingredient]['selected']
+        self.update_total_amount(ingredient)
 
-    def calculate_amount_difference(self, needed, available):
-        needed_value, needed_unit = extract_value_and_unit(needed)
-        available_value, available_unit = extract_value_and_unit(available)
-        
-        needed_common = convert_to_common_unit(needed_value, needed_unit)
-        available_common = convert_to_common_unit(available_value, available_unit)
-        
-        difference = needed_common - available_common
-        return max(0, difference)  # Return 0 if difference is negative
+    def update_quantity(self, ingredient, name, price, amount, change):
+        item_data = self.chosen_ingredients[ingredient][name]
+        new_quantity = item_data['quantity'] + change
+        if new_quantity >= 0:
+            item_data['quantity'] = new_quantity
+            item_data['quantity_label'].setText(str(new_quantity))
+            self.update_total_amount(ingredient)
 
-    def show_additional_options(self, ingredient, difference, previous_at_home, previous_name):
-        dialog = QDialog(self)
-        dialog.setWindowTitle(f"Additional {ingredient} Needed")
-        dialog.setGeometry(200, 200, 400, 300)
+    def update_total_amount(self, ingredient):
+        total_amount = 0
+        recipe_amount = self.recipe_amounts.get(ingredient, "0g")
+        recipe_amount_parsed = self.parse_amount(recipe_amount)
+        recipe_amount_value = self.get_amount_value(recipe_amount)
 
-        layout = QVBoxLayout(dialog)
-        
-        label = QLabel(f"You still need {difference:.2f}g of {ingredient}. Please select an additional option:")
-        layout.addWidget(label)
+        # Calculate amount from "At Home" selection
+        if 'selected' in self.chosen_ingredients[ingredient]:
+            name, price, amount, is_home = self.chosen_ingredients[ingredient]['selected']
+            if is_home:
+                total_amount += self.get_amount_value(amount)
 
-        button_group = QButtonGroup(dialog)
+        # Calculate amount from "Need to Buy" selections
+        for name, item_data in self.chosen_ingredients[ingredient].items():
+            if isinstance(item_data, dict) and 'quantity' in item_data:
+                quantity = item_data['quantity']
+                amount = self.recommender.get_grocery_item_amount(name)
+                total_amount += quantity * self.get_amount_value(amount)
 
-        home_options = self.recommender.get_home_ingredients_by_category(ingredient)
-        grocery_options = self.recommender.get_grocery_items_by_category(ingredient)
+        total_label = self.chosen_ingredients[ingredient]['total_label']
+        total_label.setText(f"Selected: {total_amount}{recipe_amount_parsed.split()[1]} / {recipe_amount_parsed}")
 
-        for name, price, amount in home_options:
-            if not (previous_at_home and name == previous_name):
-                radio = QRadioButton(f"{name} (${price:.2f}) (Available: {amount}) - At Home")
-                radio.toggled.connect(lambda checked, n=name, p=price, a=amount: 
-                                      self.on_additional_selected(checked, ingredient, (n, p), True, a))
-                button_group.addButton(radio)
-                layout.addWidget(radio)
+        # Update color based on whether enough has been selected
+        if total_amount >= recipe_amount_value:
+            total_label.setStyleSheet("color: green;")
+        else:
+            total_label.setStyleSheet("color: red;")
 
-        for id, name, price, amount in grocery_options:
-            radio = QRadioButton(f"{name} (${price:.2f}) (Amount: {amount}) - Need to Buy")
-            radio.toggled.connect(lambda checked, n=name, p=price, a=amount: 
-                                  self.on_additional_selected(checked, ingredient, (n, p), False, a))
-            button_group.addButton(radio)
-            layout.addWidget(radio)
+    def parse_amount(self, amount_str):
+        # Convert amount string to a consistent format with a space before the unit
+        units = ['kg', 'g', 'ml', 'l', 'piece']
+        for unit in units:
+            if amount_str.endswith(unit):
+                number = amount_str[:-len(unit)]
+                return f"{number} {unit}"
+        return amount_str  # Return as is if no known unit is found
 
-        confirm_button = QPushButton('Confirm Additional Selection')
-        confirm_button.clicked.connect(dialog.accept)
-        layout.addWidget(confirm_button)
+    def get_amount_value(self, amount_str):
+        parsed = self.parse_amount(amount_str)
+        value, unit = parsed.split()
+        return float(value)
 
-        dialog.exec_()
-
-    def on_additional_selected(self, checked, ingredient, item, at_home, amount):
-        if checked:
-            name, price = item
-            current_name, current_price, current_at_home, current_amount = self.chosen_ingredients[ingredient]
-            
-            new_amount = self.calculate_new_amount(current_amount, amount)
-            
-            self.chosen_ingredients[ingredient] = (
-                f"{current_name} + {name}",
-                current_price + price,
-                current_at_home and at_home,
-                new_amount
-            )
-
-    def calculate_new_amount(self, amount1, amount2):
-        value1, unit1 = extract_value_and_unit(amount1)
-        value2, unit2 = extract_value_and_unit(amount2)
-        
-        total_value = convert_to_common_unit(value1, unit1) + convert_to_common_unit(value2, unit2)
-        
-        return f"{total_value}g"  # Assuming we're using grams as the common unit
 
     def confirm_selection(self):
-        recipe_ingredients = self.recommender.get_recipe_ingredients(self.recipe_id)
-        missing_ingredients = set(recipe_ingredients) - set(self.chosen_ingredients.keys())
-        
+        missing_ingredients = []
+        selected_ingredients = []
+
+        for ingredient, data in self.chosen_ingredients.items():
+            total_amount = 0
+            recipe_amount = self.recipe_amounts.get(ingredient, "0g")
+            recipe_amount_value = self.get_amount_value(recipe_amount)
+
+            # Check "At Home" selection
+            if 'selected' in data and data['selected'][3]:  # is_home
+                name, price, amount, _ = data['selected']
+                total_amount += self.get_amount_value(amount)
+                selected_ingredients.append((ingredient, name, price, amount, True))
+
+            # Check "Need to Buy" selections
+            for name, item_data in data.items():
+                if isinstance(item_data, dict) and 'quantity' in item_data:
+                    quantity = item_data['quantity']
+                    if quantity > 0:
+                        amount = self.recommender.get_grocery_item_amount(name)
+                        price = self.recommender.get_grocery_item_price(name)
+                        amount_value = self.get_amount_value(amount)
+                        total_amount += quantity * amount_value
+                        new_amount = f"{quantity * amount_value}{amount[-1]}"
+                        new_price = price * quantity
+                        selected_ingredients.append((ingredient, name, new_price, new_amount, False))
+
+            if total_amount < recipe_amount_value:
+                missing_ingredients.append(ingredient)
+
         if missing_ingredients:
-            message = "You've chosen to use nothing for the following ingredients:\n"
+            message = "You haven't selected enough of the following ingredients:\n"
             message += ", ".join(missing_ingredients)
-            message += "\n\nDo you want to continue?"
+            message += "\n\nDo you want to continue anyway?"
             reply = QMessageBox.question(self, 'Confirm Selection', message, 
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if reply == QMessageBox.No:
                 return
 
-        for ingredient, (name, price, at_home, _) in self.chosen_ingredients.items():
-            self.recommender.add_to_chosen_for_recipe(name, ingredient, price, at_home)
+        for ingredient, name, price, amount, is_home in selected_ingredients:
+            self.recommender.add_to_chosen_for_recipe(name, ingredient, price, is_home, amount)
 
-        total_price, to_buy_price = self.recommender.get_total_prices()
-        message = (f"Total price for the recipe: ${total_price:.2f}\n"
+        _, to_buy_price = self.recommender.get_total_prices() # TODO : _ can be removed
+        message = (
                    f"Price for items you need to buy: ${to_buy_price:.2f}\n\n"
                    "Would you like to make this recipe? "
                    "If yes, items you need to buy will be added to your shopping list.")
@@ -424,13 +486,14 @@ class IngredientSelectionDialog(QDialog):
 
         if reply == QMessageBox.Yes:
             self.recommender.add_to_shopping_list()
-            self.recommender.add_to_cooked_recipes(self.recipe_id)
-            QMessageBox.information(self, 'Success', 'Recipe added to cooked recipes and items added to shopping list.')
+            QMessageBox.information(self, 'Success', 'Items added to shopping list.')
+            self.accept()  # Close the dialog
         else:
             QMessageBox.information(self, 'Cancelled', 'No items were added to the shopping list.')
 
         self.recommender.clear_chosen_for_recipe()
-        self.accept()
+
+
 
 
 if __name__ == '__main__':

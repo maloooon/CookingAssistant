@@ -13,12 +13,12 @@ def create_groceries_database():
     # price: Price of the grocery item
 
     # Drop existing tables
-   # cursor.execute("DROP TABLE IF EXISTS groceries")
+  #  cursor.execute("DROP TABLE IF EXISTS groceries")
    # cursor.execute("DROP TABLE IF EXISTS home")
    # cursor.execute("DROP TABLE IF EXISTS grocerylist")
    # cursor.execute("DROP TABLE IF EXISTS recipes")
-   # cursor.execute("DROP TABLE IF EXISTS chosenforrecipe")
-   # cursor.execute("DROP TABLE IF EXISTS shoppinglist")
+  #  cursor.execute("DROP TABLE IF EXISTS chosenforrecipe")
+    cursor.execute("DROP TABLE IF EXISTS shoppinglist")
    # cursor.execute("DROP TABLE IF EXISTS cookedrecipes")
 
 
@@ -39,7 +39,6 @@ def create_groceries_database():
             category TEXT NOT NULL,
             price REAL NOT NULL,
             amount TEXT NOT NULL
-            
 
         )
     ''')
@@ -71,7 +70,8 @@ def create_groceries_database():
             name TEXT NOT NULL,
             category TEXT NOT NULL,
             price REAL NOT NULL,
-            athome BOOL NOT NULL
+            athome BOOL NOT NULL,
+            amount TEXT NOT NULL
         )
     ''')
 
@@ -80,7 +80,9 @@ def create_groceries_database():
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
                 category TEXT NOT NULL,
-                price REAL NOT NULL
+                price REAL NOT NULL,
+                amount TEXT NOT NULL,
+                quantity REAL NOT NULL
                    
         )
     ''')
