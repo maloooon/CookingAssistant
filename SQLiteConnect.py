@@ -236,3 +236,60 @@ if __name__ == "__main__":
     
    # empty_groceries_table()
   #  drop_table('groceries', 'home')
+
+
+
+
+def add_to_shopping_list(self):
+    try:
+        # Fetch items that are not at home from chosenforrecipe
+        self.cursor.execute("SELECT name, category, price, amount FROM chosenforrecipe WHERE athome = 0")
+        items_to_buy = self.cursor.fetchall()
+
+        if not items_to_buy:
+            print("No items need to be added to the shopping list.")
+            return
+
+        for name, category, price, amount in items_to_buy:
+            # Get the original amount from the groceries table
+            self.cursor.execute("SELECT amount FROM groceries WHERE name = ?", (name,))
+            original_amount = self.cursor.fetchone()
+
+            if original_amount:
+                original_amount = original_amount[0]
+                # Calculate the quantity ratio
+                current_amount_value = self.get_amount_value(amount)
+                original_amount_value = self.get_amount_value(original_amount)
+                quantity_ratio = current_amount_value / original_amount_value if original_amount_value != 0 else 0
+
+                # Check if the item already exists in the shopping list
+                self.cursor.execute("SELECT amount, price, quantity FROM shoppinglist WHERE name = ?", (name,))
+                existing_item = self.cursor.fetchone()
+
+                if existing_item:
+                    existing_amount, existing_price, existing_quantity = existing_item
+                    # Add the amounts together
+                    new_amount_value = self.get_amount_value(existing_amount) + current_amount_value
+                    new_amount = f"{new_amount_value}{self.get_amount_unit(existing_amount)}"
+                    new_price = existing_price + price
+                    new_quantity = existing_quantity + quantity_ratio
+
+                    # Update the existing item
+                    self.cursor.execute("""
+                        UPDATE shoppinglist 
+                        SET amount = ?, price = ?, quantity = ?
+                        WHERE name = ?
+                    """, (new_amount, new_price, new_quantity, name))
+                else:
+                    # Insert new item
+                    self.cursor.execute("""
+                        INSERT INTO shoppinglist (name, category, price, amount, quantity)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (name, category, price, amount, quantity_ratio))
+
+        self.conn.commit()
+        print(f"Updated shopping list with {len(items_to_buy)} item(s).")
+
+    except sqlite3.Error as e:
+        print(f"An error occurred: {e}")
+        self.conn.rollback()

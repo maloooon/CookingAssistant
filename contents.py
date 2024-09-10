@@ -115,7 +115,11 @@ class RecipeRecommenderGUI(QMainWindow):
         dialog = CookingDialog(self.recommender)
         dialog.exec_()
 
+    def show_shopping_list(self):
+        dialog = ShoppingListDialog(self.recommender)
+        dialog.exec_()
 
+"""
     def show_shopping_list(self):
         self.recommender.cursor.execute("SELECT name, category, price, amount, quantity FROM shoppinglist")
         shopping_list = self.recommender.cursor.fetchall()
@@ -173,7 +177,7 @@ class RecipeRecommenderGUI(QMainWindow):
         except ValueError:
             print(f"Warning: Could not convert '{amount_str}' to a numeric value.")
             return 0.0
-
+"""
 
 """
     def confirm_selection(self):
@@ -188,7 +192,155 @@ class RecipeRecommenderGUI(QMainWindow):
                 if reply == QMessageBox.Yes:
                     return  # Go back to selection
 """
-                
+
+
+class ShoppingListDialog(QDialog):
+    def __init__(self, recommender):
+        super().__init__()
+        self.recommender = recommender
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle("Shopping List")
+        self.setGeometry(150, 150, 800, 600)
+
+        layout = QVBoxLayout(self)
+
+        # Search bar
+        search_layout = QHBoxLayout()
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search for groceries...")
+        self.search_bar.textChanged.connect(self.update_search_results)
+        search_layout.addWidget(self.search_bar)
+
+        add_button = QPushButton("Add to List")
+        add_button.clicked.connect(self.add_selected_grocery)
+        search_layout.addWidget(add_button)
+
+        layout.addLayout(search_layout)
+
+        # List view for search results
+        self.list_view = QListView()
+        self.model = QStandardItemModel()
+        self.proxy_model = QSortFilterProxyModel()
+        self.proxy_model.setSourceModel(self.model)
+        self.proxy_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self.list_view.setModel(self.proxy_model)
+        layout.addWidget(self.list_view)
+
+        # Shopping list table
+        self.table = QTableWidget()
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels(["Name", "Category", "Price", "Amount", "Quantity", "Actions"])
+        layout.addWidget(self.table)
+
+        # Total price label
+        self.total_label = QLabel()
+        self.total_label.setAlignment(Qt.AlignRight)
+        self.total_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-top: 10px;")
+        layout.addWidget(self.total_label)
+
+        self.populate_groceries()
+        self.load_shopping_list()
+
+    def populate_groceries(self):
+        self.recommender.cursor.execute("SELECT name FROM groceries")
+        groceries = self.recommender.cursor.fetchall()
+        for grocery in groceries:
+            item = QStandardItem(grocery[0])
+            self.model.appendRow(item)
+
+    def update_search_results(self, text):
+        self.proxy_model.setFilterRegExp(f"\\b{text}")
+
+    def add_selected_grocery(self):
+        selected_indexes = self.list_view.selectedIndexes()
+        if selected_indexes:
+            grocery_name = self.proxy_model.data(selected_indexes[0])
+            self.recommender.cursor.execute("SELECT name, category, price, amount FROM groceries WHERE name = ?", (grocery_name,))
+            grocery_data = self.recommender.cursor.fetchone()
+            if grocery_data:
+                self.recommender.add_to_shopping_list(grocery_data[0], grocery_data[1], grocery_data[2], grocery_data[3], 1)
+                self.load_shopping_list()
+
+    def load_shopping_list(self):
+        self.recommender.cursor.execute("SELECT name, category, price, amount, quantity FROM shoppinglist")
+        shopping_list = self.recommender.cursor.fetchall()
+
+        self.table.setRowCount(len(shopping_list))
+        total_price = 0
+
+        for row, (name, category, price, amount, quantity) in enumerate(shopping_list):
+            self.table.setItem(row, 0, QTableWidgetItem(name))
+            self.table.setItem(row, 1, QTableWidgetItem(category))
+            self.table.setItem(row, 2, QTableWidgetItem(f"${price:.2f}"))
+            self.table.setItem(row, 3, QTableWidgetItem(amount))
+            self.table.setItem(row, 4, QTableWidgetItem(f"{quantity:.1f}"))
+
+            actions_widget = QWidget()
+            actions_layout = QHBoxLayout(actions_widget)
+            actions_layout.setContentsMargins(0, 0, 0, 0)  # Remove layout margins
+            actions_layout.setSpacing(2)  # Reduce space between buttons
+
+            minus_button = QPushButton("-")
+            minus_button.setFixedSize(30, 30)  # Set a fixed size for the buttons
+            minus_button.clicked.connect(lambda _, n=name: self.update_quantity(n, -1))
+            
+            plus_button = QPushButton("+")
+            plus_button.setFixedSize(30, 30)  # Set a fixed size for the buttons
+            plus_button.clicked.connect(lambda _, n=name: self.update_quantity(n, 1))
+            
+            actions_layout.addWidget(minus_button)
+            actions_layout.addWidget(plus_button)
+            actions_layout.addStretch()  # Add stretch to push buttons to the left
+
+            self.table.setCellWidget(row, 5, actions_widget)
+
+            total_price += price * quantity
+
+        # Adjust column widths
+        self.table.setColumnWidth(0, 200)  # Name
+        self.table.setColumnWidth(1, 100)  # Category
+        self.table.setColumnWidth(2, 80)   # Price
+        self.table.setColumnWidth(3, 80)   # Amount
+        self.table.setColumnWidth(4, 80)   # Quantity
+        self.table.setColumnWidth(5, 100)  # Actions
+
+        self.table.resizeRowsToContents()
+        self.total_label.setText(f"Total Price: ${total_price:.2f}")
+
+    def update_quantity(self, name, change):
+        self.recommender.cursor.execute("SELECT quantity, price, amount FROM shoppinglist WHERE name = ?", (name,))
+        current_data = self.recommender.cursor.fetchone()
+        if current_data:
+            current_quantity, current_price, current_amount = current_data
+            new_quantity = max(0, current_quantity + change)
+
+            if new_quantity == 0:
+                self.recommender.cursor.execute("DELETE FROM shoppinglist WHERE name = ?", (name,))
+            else:
+                # Get original price and amount from groceries table
+                self.recommender.cursor.execute("SELECT price, amount FROM groceries WHERE name = ?", (name,))
+                original_data = self.recommender.cursor.fetchone()
+                if original_data:
+                    original_price, original_amount = original_data
+                    new_price = (new_quantity / current_quantity) * current_price
+                    new_amount = f"{self.get_amount_value(current_amount) * (new_quantity / current_quantity)}{self.get_amount_unit(current_amount)}"
+
+                    self.recommender.cursor.execute("""
+                        UPDATE shoppinglist 
+                        SET quantity = ?, price = ?, amount = ? 
+                        WHERE name = ?
+                    """, (new_quantity, new_price, new_amount, name))
+
+            self.recommender.conn.commit()
+            self.load_shopping_list()
+
+    def get_amount_value(self, amount_str):
+        return float(''.join(char for char in amount_str if char.isdigit() or char == '.'))
+
+    def get_amount_unit(self, amount_str):
+        return ''.join(char for char in amount_str if char.isalpha())          
 
 
 class CookingDialog(QDialog):
