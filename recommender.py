@@ -192,10 +192,22 @@ class RecipeRecommender:
         return ''.join(char for char in amount_str if char.isalpha())
 
     def add_to_cooked_recipes(self, recipe_id):
-        # Add a recipe to the 'cookedrecipes' table
-        self.cursor.execute("SELECT name FROM recipes where id = ?", (int(recipe_id),))
+        # Get the recipe name from the 'recipes' table
+        self.cursor.execute("SELECT name FROM recipes WHERE id = ?", (int(recipe_id),))
         recipe_name = self.cursor.fetchone()[0]
-        self.cursor.execute("INSERT INTO cookedrecipes (name) VALUES (?)", (recipe_name,))
+        
+        # Check if the recipe already exists in the 'cookedrecipes' table
+        self.cursor.execute("SELECT quantity FROM cookedrecipes WHERE name = ?", (recipe_name,))
+        existing_recipe = self.cursor.fetchone()
+        
+        if existing_recipe:
+            # If the recipe exists, update the quantity
+            new_quantity = existing_recipe[0] + 1
+            self.cursor.execute("UPDATE cookedrecipes SET quantity = ? WHERE name = ?", (new_quantity, recipe_name))
+        else:
+            # If the recipe doesn't exist, insert a new row with quantity 1
+            self.cursor.execute("INSERT INTO cookedrecipes (name, quantity) VALUES (?, 1)", (recipe_name,))
+        
         self.conn.commit()
 
     def get_recipe_amounts(self, recipe_id):

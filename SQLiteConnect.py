@@ -18,8 +18,24 @@ def create_groceries_database():
    # cursor.execute("DROP TABLE IF EXISTS grocerylist")
    # cursor.execute("DROP TABLE IF EXISTS recipes")
   #  cursor.execute("DROP TABLE IF EXISTS chosenforrecipe")
-    cursor.execute("DROP TABLE IF EXISTS shoppinglist")
+  #  cursor.execute("DROP TABLE IF EXISTS shoppinglist")
    # cursor.execute("DROP TABLE IF EXISTS cookedrecipes")
+
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS nutrition (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            amount TEXT NOT NULL,
+            calories REAL NOT NULL,
+            fat REAL NOT NULL,
+            protein REAL NOT NULL,
+            carbs REAL NOT NULL,
+            sugar REAL NOT NULL,
+            fiber REAL NOT NULL
+            )      
+        ''')
 
 
     cursor.execute('''
@@ -60,7 +76,8 @@ def create_groceries_database():
             original_ingredients TEXT NOT NULL,
             ingredients TEXT NOT NULL,
             amount TEXT NOT NULL,
-            servings REAL NOT NULL
+            servings REAL NOT NULL,
+            link TEXT NOT NULL
         )
     ''')
 
@@ -90,7 +107,8 @@ def create_groceries_database():
     cursor.execute('''
             CREATE TABLE IF NOT EXISTS cookedrecipes (
                 id INTEGER PRIMARY KEY,
-                name TEXT NOT NULL
+                name TEXT NOT NULL,
+                quantity REAL NOT NULL
          )
     ''')
 

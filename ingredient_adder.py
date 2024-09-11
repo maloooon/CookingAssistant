@@ -64,7 +64,7 @@ def read_ingredients_file(filename):
             print(f"Skipping line due to invalid price: {line.strip()}")
 
 def main():
-    filename = 'all_ingredients_despar.txt'  # You can change this to accept user input
+    filename = 'all_ingredients_home_start.txt' 
     read_ingredients_file(filename)
 
 if __name__ == "__main__":

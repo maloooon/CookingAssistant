@@ -4,6 +4,7 @@
 # but just ingredients put in line by line
 # first line is title of recipe
 # second line is amount of servings (for the given amounts)
+# third line is link to the recipe
 
 
 # Note that stuff like salt is removed from the recipes, as it is assumed that it is already in the house
@@ -21,9 +22,10 @@ def read_recipe_file(file_path):
     
     title = lines[0].strip()
     servings = float(lines[1].strip())
-    recipe_content = [line.strip() for line in lines[2:] if line.strip()]
+    link = lines[2].strip()
+    recipe_content = [line.strip() for line in lines[3:] if line.strip()]
     
-    return title, servings, recipe_content
+    return title, servings, link, recipe_content
 
 def create_word_to_category_mapping(category_mapping):
     return {word.lower(): category 
@@ -73,10 +75,9 @@ def format_as_single_word(text):
 def format_as_single_word_amounts(text):
     return re.sub(r'\s+', '', text.strip())
 
-def insert_recipe_to_db(db_path, recipe_name, original_ingredients, mapped_ingredients, amounts, servings):
+def insert_recipe_to_db(db_path, recipe_name, original_ingredients, mapped_ingredients, amounts, servings, link):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-
 
     formatted_original = ' '.join(format_as_single_word(ing) for ing in original_ingredients)
     formatted_amounts = ' '.join(format_as_single_word_amounts(amt) if amt != 'N/A' else amt for amt in amounts)
@@ -86,12 +87,13 @@ def insert_recipe_to_db(db_path, recipe_name, original_ingredients, mapped_ingre
         formatted_original,
         ' '.join(mapped_ingredients),
         formatted_amounts,
-        servings
+        servings,
+        link
     )
 
     cursor.execute('''
-        INSERT INTO recipes (name, original_ingredients, ingredients, amount, servings)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO recipes (name, original_ingredients, ingredients, amount, servings, link)
+        VALUES (?, ?, ?, ?, ?, ?)
     ''', recipe_data)
 
     conn.commit()
@@ -372,8 +374,8 @@ category_mapping = {
 word_to_category = create_word_to_category_mapping(category_mapping)
 
 # Read the recipe file
-recipe_file_path = 'recipe_ingredients.txt'  # Replace with your actual file path
-recipe_name, servings, recipe_content = read_recipe_file(recipe_file_path)
+recipe_file_path = 'recipe_ingredients.txt'  
+recipe_name, servings, link, recipe_content = read_recipe_file(recipe_file_path)
 
 # Process the recipe
 result, unmatched_lines = process_recipe(recipe_content, word_to_category)
@@ -393,7 +395,7 @@ else:
 
     # Insert the recipe into the database
     db_path = 'groceries.db'
-    insert_recipe_to_db(db_path, recipe_name, original_ingredients, mapped_ingredients, amounts, servings)
+    insert_recipe_to_db(db_path, recipe_name, original_ingredients, mapped_ingredients, amounts, servings, link)
 
     print(f"Recipe '{recipe_name}' has been added to the database.")
 

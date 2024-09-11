@@ -1,9 +1,9 @@
 import sys
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
                              QListWidget, QMessageBox, QDialog, QRadioButton, QButtonGroup, QScrollArea, QGroupBox, 
-                             QTableWidget, QTableWidgetItem, QLineEdit, QListView)
-from PyQt5.QtCore import Qt, QSortFilterProxyModel
-from PyQt5.QtGui import QStandardItemModel, QStandardItem
+                             QTableWidget, QTableWidgetItem, QLineEdit, QListView, QTextEdit)
+from PyQt5.QtCore import Qt, QSortFilterProxyModel, QUrl
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QDesktopServices
 
 from recommender import RecipeRecommender  
 from amount_comparison import compare_amounts, extract_value_and_unit, convert_to_common_unit, is_enough_ingredient
@@ -119,80 +119,6 @@ class RecipeRecommenderGUI(QMainWindow):
         dialog = ShoppingListDialog(self.recommender)
         dialog.exec_()
 
-"""
-    def show_shopping_list(self):
-        self.recommender.cursor.execute("SELECT name, category, price, amount, quantity FROM shoppinglist")
-        shopping_list = self.recommender.cursor.fetchall()
-
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Shopping List")
-        dialog.setGeometry(150, 150, 600, 400)
-
-        layout = QVBoxLayout(dialog)
-        
-        table = QTableWidget()
-        table.setColumnCount(5)
-        table.setHorizontalHeaderLabels(["Name", "Category", "Price", "Amount", "Quantity"])
-        table.setRowCount(len(shopping_list))
-
-        total_price = 0
-        for row, (name, category, price, amount, quantity) in enumerate(shopping_list):
-            table.setItem(row, 0, QTableWidgetItem(name))
-            table.setItem(row, 1, QTableWidgetItem(category))
-            
-            price_item = QTableWidgetItem(f"${price:.2f}")
-            price_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            table.setItem(row, 2, price_item)
-            
-            table.setItem(row, 3, QTableWidgetItem(amount))
-            
-            quantity_item = QTableWidgetItem(f"{quantity:.2f}")
-            quantity_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            table.setItem(row, 4, quantity_item)
-
-            total_price += price
-
-        table.resizeColumnsToContents()
-        layout.addWidget(table)
-
-        total_label = QLabel(f"Total Price: ${total_price:.2f}")
-        total_label.setAlignment(Qt.AlignRight)
-        total_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-top: 10px;")
-        layout.addWidget(total_label)
-
-        dialog.exec_()
-
-    def get_amount_value(self, amount_str):
-        # Remove all non-numeric characters except the decimal point
-        numeric_string = ''.join(char for char in amount_str if char.isdigit() or char == '.')
-        
-        # Handle cases where there might be multiple decimal points
-        parts = numeric_string.split('.')
-        if len(parts) > 2:
-            # If there are multiple decimal points, join all parts after the first
-            numeric_string = parts[0] + '.' + ''.join(parts[1:])
-        
-        try:
-            return float(numeric_string)
-        except ValueError:
-            print(f"Warning: Could not convert '{amount_str}' to a numeric value.")
-            return 0.0
-"""
-
-"""
-    def confirm_selection(self):
-        recipe_ingredients = self.recommender.get_recipe_ingredients(self.recipe_id)
-        missing_ingredients = set(recipe_ingredients) - set(self.chosen_ingredients.keys())
-        
-        for ingredient in missing_ingredients:
-            if not is_enough_ingredient(self.home_amounts[ingredient], self.recipe_amounts[ingredient]):
-                reply = QMessageBox.question(self, 'Insufficient Ingredient',
-                                             f"You don't have enough {ingredient} at home. Do you want to choose an alternative?",
-                                             QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
-                if reply == QMessageBox.Yes:
-                    return  # Go back to selection
-"""
-
 
 class ShoppingListDialog(QDialog):
     def __init__(self, recommender):
@@ -296,7 +222,7 @@ class ShoppingListDialog(QDialog):
 
             self.table.setCellWidget(row, 5, actions_widget)
 
-            total_price += price * quantity
+            total_price += price
 
         # Adjust column widths
         self.table.setColumnWidth(0, 200)  # Name
@@ -342,7 +268,7 @@ class ShoppingListDialog(QDialog):
     def get_amount_unit(self, amount_str):
         return ''.join(char for char in amount_str if char.isalpha())          
 
-
+"""
 class CookingDialog(QDialog):
     def __init__(self, recommender):
         super().__init__()
@@ -411,9 +337,181 @@ class CookingDialog(QDialog):
                 QMessageBox.information(self, 'Cancelled', 'No recipe was added to cooked recipes.')
         else:
             QMessageBox.warning(self, 'No Selection', 'Please select a recipe first.')
+"""
 
+class CookingDialog(QDialog):
+    def __init__(self, recommender):
+        super().__init__()
+        self.recommender = recommender
+        self.initUI()
 
+    def initUI(self):
+        self.setWindowTitle('What did you cook?')
+        self.setGeometry(200, 200, 600, 400)
 
+        layout = QVBoxLayout(self)
+
+        # Search bar
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search for recipes...")
+        self.search_bar.textChanged.connect(self.update_search_results)
+        layout.addWidget(self.search_bar)
+
+        # List view for search results
+        self.list_view = QListView()
+        self.model = QStandardItemModel()
+        self.proxy_model = QSortFilterProxyModel()
+        self.proxy_model.setSourceModel(self.model)
+        self.proxy_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self.list_view.setModel(self.proxy_model)
+        layout.addWidget(self.list_view)
+
+        # Populate the model with all recipes
+        self.populate_recipes()
+
+        # Select button
+        select_button = QPushButton('View Recipe Details')
+        select_button.clicked.connect(self.view_recipe_details)
+        layout.addWidget(select_button)
+
+    def populate_recipes(self):
+        recipes = self.recommender.get_recipes()
+        for recipe in recipes:
+            item = QStandardItem(recipe[1])  # Assuming recipe[1] is the name
+            item.setData(recipe[0], Qt.UserRole)  # Store the recipe ID
+            self.model.appendRow(item)
+
+    def update_search_results(self, text):
+        self.proxy_model.setFilterRegExp(f"\\b{text}")
+
+    def view_recipe_details(self):
+        selected_indexes = self.list_view.selectedIndexes()
+        if selected_indexes:
+            proxy_index = selected_indexes[0]
+            source_index = self.proxy_model.mapToSource(proxy_index)
+            selected_item = self.model.itemFromIndex(source_index)
+            
+            recipe_name = selected_item.text()
+            recipe_id = selected_item.data(Qt.UserRole)
+            
+            detail_dialog = RecipeDetailDialog(self.recommender, recipe_id, recipe_name)
+            detail_dialog.exec_()
+        else:
+            QMessageBox.warning(self, 'No Selection', 'Please select a recipe first.')
+
+class RecipeDetailDialog(QDialog):
+    def __init__(self, recommender, recipe_id, recipe_name):
+        super().__init__()
+        self.recommender = recommender
+        self.recipe_id = recipe_id
+        self.recipe_name = recipe_name
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle(f'Recipe Details: {self.recipe_name}')
+        self.setGeometry(150, 150, 800, 600)
+
+        layout = QVBoxLayout(self)
+
+        # Recipe name as title
+        title_label = QLabel(self.recipe_name)
+        title_label.setStyleSheet("font-size: 24px; font-weight: bold;")
+        layout.addWidget(title_label)
+
+        # Original recipe link
+        original_link = self.get_original_link()
+        link_button = QPushButton("View Original Recipe")
+        link_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(original_link)))
+        layout.addWidget(link_button, alignment=Qt.AlignRight)
+
+        # Ingredients
+        ingredients_label = QLabel("Ingredients:")
+        ingredients_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        layout.addWidget(ingredients_label)
+        
+        ingredients_text = QTextEdit()
+        ingredients_text.setReadOnly(True)
+        ingredients_text.setPlainText(self.get_ingredients())
+        layout.addWidget(ingredients_text)
+
+        # User-editable summary
+        summary_label = QLabel("Recipe Summary (Editable):")
+        summary_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        layout.addWidget(summary_label)
+        
+        self.summary_text = QTextEdit()
+        self.summary_text.setPlaceholderText("Enter your recipe summary or important notes here...")
+        layout.addWidget(self.summary_text)
+
+        # Load existing summary if available
+        existing_summary = self.load_existing_summary()
+        if existing_summary:
+            self.summary_text.setPlainText(existing_summary)
+
+        # Save Summary button
+        save_button = QPushButton('Save Summary')
+        save_button.clicked.connect(self.save_summary)
+        layout.addWidget(save_button)
+
+        # Finish Cooking button
+        finish_button = QPushButton('Finish Cooking')
+        finish_button.clicked.connect(self.finish_cooking)
+        layout.addWidget(finish_button)
+
+    def get_original_link(self):
+        self.recommender.cursor.execute("SELECT link FROM recipes WHERE id = ?", (self.recipe_id,))
+        link = self.recommender.cursor.fetchone()
+        return link[0] if link else ""
+
+    def get_ingredients(self):
+        self.recommender.cursor.execute("""
+            SELECT original_ingredients, amount, servings 
+            FROM recipes 
+            WHERE id = ?
+        """, (self.recipe_id,))
+        result = self.recommender.cursor.fetchone()
+        
+        if result:
+            original_ingredients, amounts, servings = result
+            ingredients_list = original_ingredients.split()
+            amounts_list = amounts.split()
+            
+            # Ensure the lists have the same length
+            min_length = min(len(ingredients_list), len(amounts_list))
+            ingredients_list = ingredients_list[:min_length]
+            amounts_list = amounts_list[:min_length]
+            
+            ingredients_with_amounts = [f"• {ing}: {amt}" for ing, amt in zip(ingredients_list, amounts_list)]
+            formatted_ingredients = "\n".join(ingredients_with_amounts)
+            
+            return f"Servings: {servings}\n\nIngredients:\n{formatted_ingredients}"
+        else:
+            return "No ingredients found for this recipe."
+        
+
+    def load_existing_summary(self):
+        self.recommender.cursor.execute("SELECT summary FROM recipes WHERE id = ?", (self.recipe_id,))
+        summary = self.recommender.cursor.fetchone()
+        return summary[0] if summary and summary[0] else ""
+
+    def save_summary(self):
+        summary = self.summary_text.toPlainText()
+        self.recommender.cursor.execute("UPDATE recipes SET summary = ? WHERE id = ?", (summary, self.recipe_id))
+        self.recommender.conn.commit()
+        QMessageBox.information(self, 'Success', 'Recipe summary has been saved.')
+
+    def finish_cooking(self):
+        reply = QMessageBox.question(self, 'Confirm Cooking', 
+                                     f"Have you finished cooking {self.recipe_name}?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            self.recommender.add_to_cooked_recipes(self.recipe_id)
+            self.recommender.update_home_ingredients(self.recipe_id)
+            QMessageBox.information(self, 'Success', f'{self.recipe_name} has been added to your cooked recipes and home ingredients have been updated.')
+            self.accept()
+        else:
+            QMessageBox.information(self, 'Cancelled', 'No recipe was added to cooked recipes.')
 
 class IngredientSelectionDialog(QDialog):
     def __init__(self, recommender, recipe_id):
