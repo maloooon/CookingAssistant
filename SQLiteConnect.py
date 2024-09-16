@@ -1,5 +1,28 @@
 import sqlite3
 
+
+def add_column_to_table(database_name, table_name, column_name, column_type):
+    conn = sqlite3.connect(database_name)
+    cursor = conn.cursor()
+
+    try:
+        # SQL command to add a new column
+        sql_command = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+        
+        # Execute the SQL command
+        cursor.execute(sql_command)
+        
+        # Commit the changes
+        conn.commit()
+        print(f"Column '{column_name}' added successfully to table '{table_name}'")
+    
+    except sqlite3.Error as e:
+        print(f"An error occurred: {e}")
+    
+    finally:
+        # Close the connection
+        conn.close()
+
 def create_groceries_database():
     # Connect to the database (creates it if it doesn't exist)
     conn = sqlite3.connect('groceries.db')
@@ -20,6 +43,7 @@ def create_groceries_database():
   #  cursor.execute("DROP TABLE IF EXISTS chosenforrecipe")
   #  cursor.execute("DROP TABLE IF EXISTS shoppinglist")
    # cursor.execute("DROP TABLE IF EXISTS cookedrecipes")
+   # cursor.execute("DROP TABLE IF EXISTS nutrition")
 
 
     cursor.execute('''
@@ -249,11 +273,12 @@ def empty_groceries_table():
 if __name__ == "__main__":
     create_groceries_database()
    # insert_sample_data()
-    display_all_groceries()
-    display_all_home()
+  #  display_all_groceries()
+  #  display_all_home()
     
    # empty_groceries_table()
   #  drop_table('groceries', 'home')
+  #  add_column_to_table('groceries.db', 'recipes', 'nutrition_values', 'TEXT')
 
 
 

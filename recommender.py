@@ -66,10 +66,19 @@ class RecipeRecommender:
         return recommended_recipes[['id', 'name', 'similarity']]
     
 
-    def get_home_ingredient_amount(self, name):
-        self.cursor.execute("SELECT amount FROM home WHERE name = ?", (name,))
+    def get_home_ingredient_amount(self, ingredient):
+        self.cursor.execute("SELECT amount FROM home WHERE category = ?", (ingredient,))
         result = self.cursor.fetchone()
         return result[0] if result else "0g"
+
+    def is_sufficient_amount(self, home_amount, required_amount):
+        home_value, home_unit = extract_value_and_unit(home_amount)
+        required_value, required_unit = extract_value_and_unit(required_amount)
+        
+        home_common = convert_to_common_unit(home_value, home_unit)
+        required_common = convert_to_common_unit(required_value, required_unit)
+        
+        return home_common >= required_common
 
     def get_grocery_item_amount(self, name):
         self.cursor.execute("SELECT amount FROM groceries WHERE name = ?", (name,))
@@ -221,21 +230,28 @@ class RecipeRecommender:
         return {}
 
 
-    
 
     def get_recipe_ingredients_and_amounts(self, recipe_id):
-        self.cursor.execute("SELECT ingredients, amount FROM recipes WHERE id = ?", (recipe_id,))
+        self.cursor.execute("SELECT ingredients, amount, servings FROM recipes WHERE id = ?", (recipe_id,))
         result = self.cursor.fetchone()
         if result:
             ingredients = result[0].split()  # Split by whitespace
             amounts = result[1].split()  # Split by whitespace
-            return list(zip(ingredients, amounts))
-        return []
+            original_servings = result[2]
+            return list(zip(ingredients, amounts)), original_servings
+        return [], 1
 
-    def update_home_ingredients(self, recipe_id):
-        recipe_ingredients = self.get_recipe_ingredients_and_amounts(recipe_id)
+    def update_home_ingredients(self, recipe_id, cooked_servings):
+        recipe_ingredients, original_servings = self.get_recipe_ingredients_and_amounts(recipe_id)
+        scaling_factor = cooked_servings / original_servings
         for ingredient, amount in recipe_ingredients:
-            self.subtract_ingredient_from_home(ingredient, amount)
+            scaled_amount = self.scale_amount(amount, scaling_factor)
+            self.subtract_ingredient_from_home(ingredient, scaled_amount)
+
+    def scale_amount(self, amount, factor):
+        value, unit = extract_value_and_unit(amount)
+        new_value = value * factor
+        return f"{new_value:.2f}{unit}"
 
     def subtract_ingredient_from_home(self, ingredient, amount):
         self.cursor.execute("SELECT amount FROM home WHERE category = ?", (ingredient,))
@@ -246,7 +262,7 @@ class RecipeRecommender:
             if new_amount[0] <= 0:
                 self.cursor.execute("DELETE FROM home WHERE category = ?", (ingredient,))
             else:
-                new_amount = f"{new_amount[0]}{new_amount[1]}"
+                new_amount = f"{new_amount[0]:.2f}{new_amount[1]}"
                 self.cursor.execute("UPDATE home SET amount = ? WHERE category = ?", (new_amount, ingredient))
             self.conn.commit()
 
@@ -262,7 +278,7 @@ class RecipeRecommender:
         else:
             new_value = common_value1 + common_value2
         
-        return max(0, new_value), unit1 
+        return max(0, new_value), unit1
 
     
 

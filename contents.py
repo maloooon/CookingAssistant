@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
                              QListWidget, QMessageBox, QDialog, QRadioButton, QButtonGroup, QScrollArea, QGroupBox, 
-                             QTableWidget, QTableWidgetItem, QLineEdit, QListView, QTextEdit)
+                             QTableWidget, QTableWidgetItem, QLineEdit, QListView, QTextEdit, QHBoxLayout, QPushButton, QSpinBox)
 from PyQt5.QtCore import Qt, QSortFilterProxyModel, QUrl
 from PyQt5.QtGui import QStandardItemModel, QStandardItem, QDesktopServices
 
@@ -405,6 +405,9 @@ class RecipeDetailDialog(QDialog):
         self.recommender = recommender
         self.recipe_id = recipe_id
         self.recipe_name = recipe_name
+        self.original_servings = self.get_original_servings()
+        self.current_servings = self.original_servings
+        self.insufficient_ingredients = []
         self.initUI()
 
     def initUI(self):
@@ -424,15 +427,28 @@ class RecipeDetailDialog(QDialog):
         link_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(original_link)))
         layout.addWidget(link_button, alignment=Qt.AlignRight)
 
+        # Add serving adjustment section
+        serving_layout = QHBoxLayout()
+        serving_layout.addWidget(QLabel("Servings:"))
+        
+        self.serving_spinbox = QSpinBox()
+        self.serving_spinbox.setMinimum(1)
+        self.serving_spinbox.setMaximum(100)  # You can adjust this maximum value
+        self.serving_spinbox.setValue(int(self.current_servings))
+        self.serving_spinbox.valueChanged.connect(self.update_servings)
+        serving_layout.addWidget(self.serving_spinbox)
+        
+        layout.addLayout(serving_layout)
+
+
         # Ingredients
         ingredients_label = QLabel("Ingredients:")
         ingredients_label.setStyleSheet("font-size: 18px; font-weight: bold;")
         layout.addWidget(ingredients_label)
-        
-        ingredients_text = QTextEdit()
-        ingredients_text.setReadOnly(True)
-        ingredients_text.setPlainText(self.get_ingredients())
-        layout.addWidget(ingredients_text)
+        self.ingredients_text = QTextEdit()
+        self.ingredients_text.setReadOnly(True)
+        self.ingredients_text.setPlainText(self.get_ingredients())
+        layout.addWidget(self.ingredients_text)
 
         # User-editable summary
         summary_label = QLabel("Recipe Summary (Editable):")
@@ -453,10 +469,114 @@ class RecipeDetailDialog(QDialog):
         save_button.clicked.connect(self.save_summary)
         layout.addWidget(save_button)
 
-        # Finish Cooking button
+        # Create a horizontal layout for the bottom section
+        bottom_layout = QHBoxLayout()
+
+        # Add Finish Cooking button to the bottom left
         finish_button = QPushButton('Finish Cooking')
         finish_button.clicked.connect(self.finish_cooking)
-        layout.addWidget(finish_button)
+        bottom_layout.addWidget(finish_button)
+
+        # Nutrition values
+        self.nutrition_label = QLabel()
+        self.nutrition_label.setAlignment(Qt.AlignRight | Qt.AlignBottom)
+        self.nutrition_label.setStyleSheet("font-size: 12px;")
+        bottom_layout.addWidget(self.nutrition_label)
+
+        # Update initial values
+        self.update_display()
+
+        # Add the bottom layout to the main layout
+        layout.addLayout(bottom_layout)
+
+
+
+    def get_original_servings(self):
+        self.recommender.cursor.execute("SELECT servings FROM recipes WHERE id = ?", (self.recipe_id,))
+        servings = self.recommender.cursor.fetchone()
+        return servings[0] if servings else 1
+    
+
+    def update_servings(self, new_servings):
+        self.current_servings = new_servings
+        self.update_display()
+        self.check_ingredient_availability()
+
+    def check_ingredient_availability(self):
+        self.insufficient_ingredients = []
+        recipe_ingredients = self.recommender.get_recipe_ingredients_and_amounts(self.recipe_id)[0]
+        scaling_factor = self.current_servings / self.original_servings
+
+        for ingredient, amount in recipe_ingredients:
+            required_amount = self.recommender.scale_amount(amount, scaling_factor)
+            home_amount = self.recommender.get_home_ingredient_amount(ingredient)
+
+            if not self.recommender.is_sufficient_amount(home_amount, required_amount):
+                self.insufficient_ingredients.append(ingredient)
+
+        if self.insufficient_ingredients:
+            self.show_ingredient_warning()
+
+    def show_ingredient_warning(self):
+        missing_ingredients = ", ".join(self.insufficient_ingredients)
+        QMessageBox.warning(self, "Insufficient Ingredients", 
+                            f"You don't have enough of the following ingredients: {missing_ingredients}")
+
+    def update_display(self):
+        self.update_ingredients()
+        self.update_nutrition()
+
+    def update_ingredients(self):
+        self.recommender.cursor.execute("""
+            SELECT original_ingredients, amount, servings 
+            FROM recipes 
+            WHERE id = ?
+        """, (self.recipe_id,))
+        result = self.recommender.cursor.fetchone()
+        
+        if result:
+            original_ingredients, original_amounts, original_servings = result
+            ingredients_list = original_ingredients.split()
+            amounts_list = original_amounts.split()
+            
+            # Ensure the lists have the same length
+            min_length = min(len(ingredients_list), len(amounts_list))
+            ingredients_list = ingredients_list[:min_length]
+            amounts_list = amounts_list[:min_length]
+            
+            # Calculate new amounts based on serving size
+            scaling_factor = self.current_servings / original_servings
+            new_amounts = [f"{float(amt.rstrip('gml')) * scaling_factor:.1f}{amt[-1] if amt[-1] in 'gml' else ''}" 
+                           for amt in amounts_list]
+            
+            ingredients_with_amounts = [f"• {ing}: {amt}" for ing, amt in zip(ingredients_list, new_amounts)]
+            formatted_ingredients = "\n".join(ingredients_with_amounts)
+            
+            self.ingredients_text.setPlainText(f"Servings: {self.current_servings}\n\nIngredients:\n{formatted_ingredients}")
+        else:
+            self.ingredients_text.setPlainText("No ingredients found for this recipe.")
+
+    def update_nutrition(self):
+        self.recommender.cursor.execute("SELECT nutrition_values FROM recipes WHERE id = ?", (self.recipe_id,))
+        nutrition = self.recommender.cursor.fetchone()
+        if nutrition and nutrition[0]:
+            original_nutrition = nutrition[0].split('\n')
+            scaling_factor = self.current_servings / self.original_servings
+            new_nutrition = []
+            for line in original_nutrition:
+                nutrient, value = line.split(': ')
+                if 'g' in value:
+                    new_value = f"{float(value[:-1]) * scaling_factor:.2f}g"
+                else:
+                    new_value = f"{float(value) * scaling_factor:.2f}"
+                new_nutrition.append(f"{nutrient}: {new_value}")
+            self.nutrition_label.setText('\n'.join(new_nutrition))
+        else:
+            self.nutrition_label.setText("Nutrition information not available")
+
+
+
+
 
     def get_original_link(self):
         self.recommender.cursor.execute("SELECT link FROM recipes WHERE id = ?", (self.recipe_id,))
@@ -489,6 +609,15 @@ class RecipeDetailDialog(QDialog):
             return "No ingredients found for this recipe."
         
 
+    def get_nutrition_values(self):
+        self.recommender.cursor.execute("SELECT nutrition_values FROM recipes WHERE id = ?", (self.recipe_id,))
+        nutrition = self.recommender.cursor.fetchone()
+        if nutrition and nutrition[0]:
+            return nutrition[0]
+        else:
+            return "Nutrition information not available"
+        
+
     def load_existing_summary(self):
         self.recommender.cursor.execute("SELECT summary FROM recipes WHERE id = ?", (self.recipe_id,))
         summary = self.recommender.cursor.fetchone()
@@ -501,14 +630,18 @@ class RecipeDetailDialog(QDialog):
         QMessageBox.information(self, 'Success', 'Recipe summary has been saved.')
 
     def finish_cooking(self):
+        if self.insufficient_ingredients:
+            QMessageBox.critical(self, "Not Possible", "Not possible due to missing ingredients")
+            return
+
         reply = QMessageBox.question(self, 'Confirm Cooking', 
-                                     f"Have you finished cooking {self.recipe_name}?",
+                                     f"Have you finished cooking {self.recipe_name} for {self.current_servings} servings?",
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         
         if reply == QMessageBox.Yes:
             self.recommender.add_to_cooked_recipes(self.recipe_id)
-            self.recommender.update_home_ingredients(self.recipe_id)
-            QMessageBox.information(self, 'Success', f'{self.recipe_name} has been added to your cooked recipes and home ingredients have been updated.')
+            self.recommender.update_home_ingredients(self.recipe_id, self.current_servings)
+            QMessageBox.information(self, 'Success', f'{self.recipe_name} for {self.current_servings} servings has been added to your cooked recipes and home ingredients have been updated.')
             self.accept()
         else:
             QMessageBox.information(self, 'Cancelled', 'No recipe was added to cooked recipes.')
@@ -681,8 +814,8 @@ class IngredientSelectionDialog(QDialog):
         parsed = self.parse_amount(amount_str)
         value, unit = parsed.split()
         return float(value)
-
-
+    
+    
     def confirm_selection(self):
         missing_ingredients = []
         selected_ingredients = []
