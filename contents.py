@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
                              QListWidget, QMessageBox, QDialog, QRadioButton, QButtonGroup, QScrollArea, QGroupBox, 
-                             QTableWidget, QTableWidgetItem, QLineEdit, QListView, QTextEdit, QHBoxLayout, QPushButton, QSpinBox)
+                             QTableWidget, QTableWidgetItem, QLineEdit, QListView, QTextEdit, QHBoxLayout, QPushButton, QSpinBox, QComboBox)
 from PyQt5.QtCore import Qt, QSortFilterProxyModel, QUrl
 from PyQt5.QtGui import QStandardItemModel, QStandardItem, QDesktopServices
 
@@ -49,15 +49,25 @@ class RecipeRecommenderGUI(QMainWindow):
         show_shopping_list_button.clicked.connect(self.show_shopping_list)
         button_layout.addWidget(show_shopping_list_button)
 
+        select_by_ingredient_button = QPushButton('Select by Ingredient')
+        select_by_ingredient_button.clicked.connect(self.open_select_by_ingredient)
+        button_layout.addWidget(select_by_ingredient_button)
+
+        cooking_button = QPushButton('Cooking...')
+        cooking_button.clicked.connect(self.open_cooking_dialog)
+        button_layout.addWidget(cooking_button)
+
         exit_button = QPushButton('Exit')
         exit_button.clicked.connect(self.close)
         button_layout.addWidget(exit_button)
 
         main_layout.addLayout(button_layout)
 
-        cooking_button = QPushButton('Cooking...')
-        cooking_button.clicked.connect(self.open_cooking_dialog)
-        button_layout.addWidget(cooking_button)
+
+    def open_select_by_ingredient(self):
+        dialog = SelectByIngredientDialog(self.recommender)
+        dialog.exec_()
+
 
     def show_recommendations(self):
         recommendations = self.recommender.recommend_recipes()
@@ -118,6 +128,114 @@ class RecipeRecommenderGUI(QMainWindow):
     def show_shopping_list(self):
         dialog = ShoppingListDialog(self.recommender)
         dialog.exec_()
+
+
+
+class SelectByIngredientDialog(QDialog):
+    def __init__(self, recommender):
+        super().__init__()
+        self.recommender = recommender
+        self.selected_ingredients = {}  
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle('Select Recipes by Ingredient')
+        self.setGeometry(100, 100, 800, 600)
+
+        layout = QHBoxLayout()
+
+        # Left side (search and ingredient selection)
+        left_layout = QVBoxLayout()
+
+        # Search bar
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search ingredients by name or category...")
+        self.search_bar.textChanged.connect(self.update_search_results)
+        left_layout.addWidget(self.search_bar)
+
+        # Ingredient list
+        self.ingredient_list = QListWidget()
+        self.ingredient_list.itemClicked.connect(self.add_ingredient)
+        left_layout.addWidget(self.ingredient_list)
+
+        # Possible recipes dropdown
+        self.recipe_combo = QComboBox()
+        self.recipe_combo.setPlaceholderText("Possible recipes...")
+        left_layout.addWidget(self.recipe_combo)
+
+        layout.addLayout(left_layout)
+
+        # Right side (selected ingredients)
+        right_layout = QVBoxLayout()
+
+        # Delete button
+        delete_button = QPushButton("-")
+        delete_button.clicked.connect(self.remove_selected_ingredient)
+        right_layout.addWidget(delete_button)
+
+        # Selected ingredients list
+        self.selected_list = QListWidget()
+        right_layout.addWidget(self.selected_list)
+
+        layout.addLayout(right_layout)
+
+        self.setLayout(layout)
+
+        # Populate initial ingredient list
+        self.populate_ingredients()
+
+
+    def populate_ingredients(self):
+        self.recommender.cursor.execute("SELECT name, category FROM groceries")
+        ingredients = self.recommender.cursor.fetchall()
+        for name, category in ingredients:
+            self.ingredient_list.addItem(f"{name} ({category})")
+
+    def update_search_results(self, text):
+        self.ingredient_list.clear()
+        self.recommender.cursor.execute("""
+            SELECT name, category FROM groceries 
+            WHERE name LIKE ? OR category LIKE ?
+        """, (f'%{text}%', f'%{text}%'))
+        ingredients = self.recommender.cursor.fetchall()
+        for name, category in ingredients:
+            self.ingredient_list.addItem(f"{name} ({category})")
+
+    def add_ingredient(self, item):
+        full_text = item.text()
+        ingredient_name = full_text.split(' (')[0]
+        category = full_text.split('(')[1].rstrip(')')
+        
+        if ingredient_name not in self.selected_ingredients:
+            self.selected_ingredients[ingredient_name] = category
+            self.selected_list.addItem(ingredient_name)
+            self.update_possible_recipes()
+
+    def remove_selected_ingredient(self):
+        current_item = self.selected_list.currentItem()
+        if current_item:
+            ingredient_name = current_item.text()
+            del self.selected_ingredients[ingredient_name]
+            self.selected_list.takeItem(self.selected_list.row(current_item))
+            self.update_possible_recipes()
+
+    def update_possible_recipes(self):
+        self.recipe_combo.clear()
+        if not self.selected_ingredients:
+            return
+
+        # Get all recipes
+        self.recommender.cursor.execute("SELECT id, name, original_ingredients FROM recipes")
+        all_recipes = self.recommender.cursor.fetchall()
+
+        possible_recipes = []
+        for recipe_id, recipe_name, original_ingredients in all_recipes:
+            recipe_ingredients = set(original_ingredients.split())
+            if all(category in recipe_ingredients for category in self.selected_ingredients.values()):
+                possible_recipes.append(recipe_name)
+
+        for recipe in possible_recipes:
+            self.recipe_combo.addItem(recipe)
 
 
 class ShoppingListDialog(QDialog):
@@ -646,14 +764,23 @@ class RecipeDetailDialog(QDialog):
         else:
             QMessageBox.information(self, 'Cancelled', 'No recipe was added to cooked recipes.')
 
+
 class IngredientSelectionDialog(QDialog):
     def __init__(self, recommender, recipe_id):
         super().__init__()
         self.recommender = recommender
         self.recipe_id = recipe_id
         self.chosen_ingredients = {}
-        self.recipe_amounts = {}
+        self.original_recipe_amounts = {}  # Store the original amounts
+        self.current_recipe_amounts = {}   # Store the current (potentially scaled) amounts
+        self.original_servings = self.get_original_servings()
+        self.current_servings = self.original_servings
         self.initUI()
+
+    def get_original_servings(self):
+        self.recommender.cursor.execute("SELECT servings FROM recipes WHERE id = ?", (self.recipe_id,))
+        servings = self.recommender.cursor.fetchone()
+        return servings[0] if servings else 1
 
     def initUI(self):
         self.setWindowTitle('Select Ingredients')
@@ -661,83 +788,31 @@ class IngredientSelectionDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
+        # Add serving adjustment section at the top
+        serving_layout = QHBoxLayout()
+        serving_layout.addWidget(QLabel(f"Original servings: {self.original_servings}"))
+        serving_layout.addWidget(QLabel("Adjust servings:"))
+        
+        self.serving_spinbox = QSpinBox()
+        self.serving_spinbox.setMinimum(1)
+        self.serving_spinbox.setMaximum(100)  # You can adjust this maximum value
+        self.serving_spinbox.setValue(self.current_servings)
+        self.serving_spinbox.valueChanged.connect(self.update_servings)
+        serving_layout.addWidget(self.serving_spinbox)
+        
+        layout.addLayout(serving_layout)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
-
-        confirm_button = QPushButton('Confirm Selection')
-        confirm_button.clicked.connect(self.confirm_selection)
-        layout.addWidget(confirm_button)
+        self.scroll_layout = QVBoxLayout(scroll_content)
 
         recipe_ingredients = self.recommender.get_recipe_ingredients(self.recipe_id)
-        self.recipe_amounts = self.recommender.get_recipe_amounts(self.recipe_id)
+        self.original_recipe_amounts = self.recommender.get_recipe_amounts(self.recipe_id)
+        self.current_recipe_amounts = self.original_recipe_amounts.copy()
 
         for ingredient in recipe_ingredients:
-            group_box = QGroupBox(ingredient)
-            group_layout = QVBoxLayout()
-
-            recipe_amount = self.recipe_amounts.get(ingredient, "0g")
-            amount_label = QLabel(f"Needed: {recipe_amount}")
-            group_layout.addWidget(amount_label)
-
-            # Add "Choose nothing" option
-            nothing_radio = QRadioButton("Choose nothing")
-            nothing_radio.toggled.connect(lambda checked, ing=ingredient: 
-                                          self.on_nothing_selected(checked, ing))
-            group_layout.addWidget(nothing_radio)
-
-            # Add "At Home" options
-            home_options = self.recommender.get_home_ingredients_by_category(ingredient)
-            if home_options:
-                for name, price, amount in home_options:
-                    radio = QRadioButton(f"{name} (${price:.2f}) (Available : {amount}) - At Home")
-                    radio.toggled.connect(lambda checked, n=name, p=price, a=amount, ing=ingredient: 
-                                          self.on_home_ingredient_selected(checked, ing, n, p, a))
-                    group_layout.addWidget(radio)
-
-            # Add "Need to Buy" options
-            grocery_options = self.recommender.get_grocery_items_by_category(ingredient)
-            for id, name, price, amount in grocery_options:
-                h_layout = QHBoxLayout()
-                label = QLabel(f"{name} (${price:.2f}) (Amount: {amount}) - Need to Buy")
-                h_layout.addWidget(label)
-                
-                minus_button = QPushButton("-")
-                minus_button.setFixedSize(30, 30)
-                minus_button.clicked.connect(lambda _, ing=ingredient, n=name, p=price, a=amount:
-                                             self.update_quantity(ing, n, p, a, -1))
-                h_layout.addWidget(minus_button)
-                
-                quantity_label = QLabel("0")
-                quantity_label.setAlignment(Qt.AlignCenter)
-                quantity_label.setFixedSize(30, 30)
-                h_layout.addWidget(quantity_label)
-                
-                plus_button = QPushButton("+")
-                plus_button.setFixedSize(30, 30)
-                plus_button.clicked.connect(lambda _, ing=ingredient, n=name, p=price, a=amount:
-                                            self.update_quantity(ing, n, p, a, 1))
-                h_layout.addWidget(plus_button)
-                
-                group_layout.addLayout(h_layout)
-                
-                if ingredient not in self.chosen_ingredients:
-                    self.chosen_ingredients[ingredient] = {}
-                self.chosen_ingredients[ingredient][name] = {
-                    'quantity_label': quantity_label,
-                    'minus_button': minus_button,
-                    'plus_button': plus_button,
-                    'quantity': 0
-                }
-
-            # Add total selected amount label
-            total_label = QLabel(f"Selected: 0{recipe_amount[-1]} / {recipe_amount}")
-            group_layout.addWidget(total_label)
-            self.chosen_ingredients[ingredient]['total_label'] = total_label
-
-            group_box.setLayout(group_layout)
-            scroll_layout.addWidget(group_box)
+            self.add_ingredient_group(ingredient)
 
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll)
@@ -745,6 +820,97 @@ class IngredientSelectionDialog(QDialog):
         confirm_button = QPushButton('Confirm Selection')
         confirm_button.clicked.connect(self.confirm_selection)
         layout.addWidget(confirm_button)
+
+    def add_ingredient_group(self, ingredient):
+        group_box = QGroupBox(ingredient)
+        group_layout = QVBoxLayout()
+
+        original_amount = self.original_recipe_amounts.get(ingredient, "0g")
+        self.amount_label = QLabel(f"Needed: {original_amount}")
+        self.amount_label.setObjectName(f"amount_label_{ingredient}")
+        group_layout.addWidget(self.amount_label)
+
+        # Add "Choose nothing" option
+        nothing_radio = QRadioButton("Choose nothing")
+        nothing_radio.toggled.connect(lambda checked, ing=ingredient: 
+                                      self.on_nothing_selected(checked, ing))
+        group_layout.addWidget(nothing_radio)
+
+        # Add "At Home" options
+        home_options = self.recommender.get_home_ingredients_by_category(ingredient)
+        if home_options:
+            for name, price, amount in home_options:
+                radio = QRadioButton(f"{name} (${price:.2f}) (Available: {amount}) - At Home")
+                radio.toggled.connect(lambda checked, n=name, p=price, a=amount, ing=ingredient: 
+                                      self.on_home_ingredient_selected(checked, ing, n, p, a))
+                group_layout.addWidget(radio)
+
+        # Add "Need to Buy" options
+        grocery_options = self.recommender.get_grocery_items_by_category(ingredient)
+        for id, name, price, amount in grocery_options:
+            h_layout = QHBoxLayout()
+            label = QLabel(f"{name} (${price:.2f}) (Amount: {amount}) - Need to Buy")
+            h_layout.addWidget(label)
+            
+            minus_button = QPushButton("-")
+            minus_button.setFixedSize(30, 30)
+            minus_button.clicked.connect(lambda _, ing=ingredient, n=name, p=price, a=amount:
+                                         self.update_quantity(ing, n, p, a, -1))
+            h_layout.addWidget(minus_button)
+            
+            quantity_label = QLabel("0")
+            quantity_label.setAlignment(Qt.AlignCenter)
+            quantity_label.setFixedSize(30, 30)
+            h_layout.addWidget(quantity_label)
+            
+            plus_button = QPushButton("+")
+            plus_button.setFixedSize(30, 30)
+            plus_button.clicked.connect(lambda _, ing=ingredient, n=name, p=price, a=amount:
+                                        self.update_quantity(ing, n, p, a, 1))
+            h_layout.addWidget(plus_button)
+            
+            group_layout.addLayout(h_layout)
+            
+            if ingredient not in self.chosen_ingredients:
+                self.chosen_ingredients[ingredient] = {}
+            self.chosen_ingredients[ingredient][name] = {
+                'quantity_label': quantity_label,
+                'minus_button': minus_button,
+                'plus_button': plus_button,
+                'quantity': 0
+            }
+
+        # Add total selected amount label
+        total_label = QLabel(f"Selected: 0{original_amount[-1]} / {original_amount}")
+        group_layout.addWidget(total_label)
+        self.chosen_ingredients[ingredient]['total_label'] = total_label
+
+        group_box.setLayout(group_layout)
+        self.scroll_layout.addWidget(group_box)
+
+    def update_servings(self, new_servings):
+        self.current_servings = new_servings
+        scaling_factor = self.current_servings / self.original_servings
+
+        for ingredient, original_amount in self.original_recipe_amounts.items():
+            new_amount = self.scale_amount(original_amount, scaling_factor)
+            self.current_recipe_amounts[ingredient] = new_amount
+            
+            # Update the "Needed" label for each ingredient
+            amount_label = self.findChild(QLabel, f"amount_label_{ingredient}")
+            if amount_label:
+                amount_label.setText(f"Needed: {new_amount}")
+
+        self.update_all_total_amounts()
+
+    def scale_amount(self, amount, factor):
+        value = float(''.join(char for char in amount if char.isdigit() or char == '.'))
+        unit = ''.join(char for char in amount if char.isalpha())
+        return f"{value * factor:.1f}{unit}"
+
+    def update_all_total_amounts(self):
+        for ingredient in self.chosen_ingredients:
+            self.update_total_amount(ingredient)
 
     def on_nothing_selected(self, checked, ingredient):
         if checked:
@@ -775,9 +941,9 @@ class IngredientSelectionDialog(QDialog):
 
     def update_total_amount(self, ingredient):
         total_amount = 0
-        recipe_amount = self.recipe_amounts.get(ingredient, "0g")
-        recipe_amount_parsed = self.parse_amount(recipe_amount)
-        recipe_amount_value = self.get_amount_value(recipe_amount)
+        current_recipe_amount = self.current_recipe_amounts.get(ingredient, "0g")
+        recipe_amount_parsed = self.parse_amount(current_recipe_amount)
+        recipe_amount_value = self.get_amount_value(current_recipe_amount)
 
         # Calculate amount from "At Home" selection
         if 'selected' in self.chosen_ingredients[ingredient]:
@@ -814,16 +980,15 @@ class IngredientSelectionDialog(QDialog):
         parsed = self.parse_amount(amount_str)
         value, unit = parsed.split()
         return float(value)
-    
-    
+
     def confirm_selection(self):
         missing_ingredients = []
         selected_ingredients = []
 
         for ingredient, data in self.chosen_ingredients.items():
             total_amount = 0
-            recipe_amount = self.recipe_amounts.get(ingredient, "0g")
-            recipe_amount_value = self.get_amount_value(recipe_amount)
+            current_recipe_amount = self.current_recipe_amounts.get(ingredient, "0g")
+            recipe_amount_value = self.get_amount_value(current_recipe_amount)
 
             # Check "At Home" selection
             if 'selected' in data and data['selected'][3]:  # is_home
@@ -859,9 +1024,10 @@ class IngredientSelectionDialog(QDialog):
         for ingredient, name, price, amount, is_home in selected_ingredients:
             self.recommender.add_to_chosen_for_recipe(name, ingredient, price, is_home, amount)
 
-        _, to_buy_price = self.recommender.get_total_prices() # TODO : _ can be removed
+        _, to_buy_price = self.recommender.get_total_prices()
         message = (
                    f"Price for items you need to buy: ${to_buy_price:.2f}\n\n"
+                   f"This recipe is adjusted for {self.current_servings} servings.\n\n"
                    "Would you like to make this recipe? "
                    "If yes, items you need to buy will be added to your shopping list.")
         reply = QMessageBox.question(self, 'Confirm Recipe', message, 
