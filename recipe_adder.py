@@ -1,104 +1,6 @@
-# Add recipes to the database
-
-# Right now implemented for https://minimalistbaker.com/white-bean-eggplant-caponata/ (working)
-# but just ingredients put in line by line
-# first line is title of recipe
-# second line is amount of servings (for the given amounts)
-# third line is link to the recipe
-
-
-# Note that stuff like salt is removed from the recipes, as it is assumed that it is already in the house
-
 import sqlite3
-import re
-
-# Connect to the database
-conn = sqlite3.connect('groceries.db')
-
-
-def read_recipe_file(file_path):
-    with open(file_path, 'r') as file:
-        lines = file.readlines()
-    
-    title = lines[0].strip()
-    servings = float(lines[1].strip())
-    link = lines[2].strip()
-    recipe_content = [line.strip() for line in lines[3:] if line.strip()]
-    
-    return title, servings, link, recipe_content
-
-def create_word_to_category_mapping(category_mapping):
-    return {word.lower(): category 
-            for category, words in category_mapping.items() 
-            for word in words}
-
-def extract_ingredients_and_amounts(line, word_to_category):
-    amount_pattern = r'(\d+(?:\.\d+)?|\d+/\d+|\w+)\s*(g|kg|ml|l|piece|pieces|medium|large|small|tsp|ts)'
-    amount_regex = re.compile(amount_pattern, re.IGNORECASE)
-    
-    ingredient_pattern = r'\b(' + '|'.join(re.escape(word) for word in word_to_category.keys()) + r')\b'
-    ingredient_regex = re.compile(ingredient_pattern, re.IGNORECASE)
-    
-    amounts = amount_regex.findall(line)
-    ingredients = ingredient_regex.findall(line)
-    
-    if not ingredients:
-        return None  # No matched ingredient found
-    
-    results = []
-    seen_ingredients = set()
-    for ingredient in ingredients:
-        if ingredient.lower() not in seen_ingredients:
-            category = word_to_category[ingredient.lower()]
-            amount = next((f"{amt[0]} {amt[1]}" for amt in amounts if line.index(amt[0]) < line.index(ingredient)), None)
-            results.append((ingredient, category, amount))
-            seen_ingredients.add(ingredient.lower())
-            if amount:
-                amounts = [amt for amt in amounts if f"{amt[0]} {amt[1]}" != amount]
-    
-    return results
-
-def process_recipe(recipe_content, word_to_category):
-    all_ingredients = []
-    unmatched_lines = []
-    for line in recipe_content:
-        ingredients = extract_ingredients_and_amounts(line, word_to_category)
-        if ingredients:
-            all_ingredients.extend(ingredients)
-        else:
-            unmatched_lines.append(line)
-    return all_ingredients, unmatched_lines
-
-def format_as_single_word(text):
-    return re.sub(r'\s+', '_', text.strip())
-
-def format_as_single_word_amounts(text):
-    return re.sub(r'\s+', '', text.strip())
-
-def insert_recipe_to_db(db_path, recipe_name, original_ingredients, mapped_ingredients, amounts, servings, link):
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
-    formatted_original = ' '.join(format_as_single_word(ing) for ing in original_ingredients)
-    formatted_amounts = ' '.join(format_as_single_word_amounts(amt) if amt != 'N/A' else amt for amt in amounts)
-
-    recipe_data = (
-        recipe_name,
-        formatted_original,
-        ' '.join(mapped_ingredients),
-        formatted_amounts,
-        servings,
-        link
-    )
-
-    cursor.execute('''
-        INSERT INTO recipes (name, original_ingredients, ingredients, amount, servings, link)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', recipe_data)
-
-    conn.commit()
-    conn.close()
-
+import sys
+import recipe_nutrition_calculator
 
 
 category_mapping = {
@@ -221,6 +123,7 @@ category_mapping = {
     "feta": ["feta"],
     "egg": ["egg"],
     "margarine": ["margarine"],
+    "heavy_cream": ["heavy cream"],
 
     # Herbs and Spices (singular only)
     "salt": ["salt"],
@@ -370,6 +273,73 @@ category_mapping = {
 }
 
 
+
+def read_recipe_file(file_path):
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+    
+    title = lines[0].strip()
+    servings = float(lines[1].strip())
+    link = lines[2].strip()
+    recipe_content = [line.strip() for line in lines[3:] if line.strip()]
+    
+    return title, servings, link, recipe_content
+
+def create_word_to_category_mapping(category_mapping):
+    return {word.lower(): category 
+            for category, words in category_mapping.items() 
+            for word in words}
+
+class IngredientMappingError(Exception):
+    pass
+
+def process_recipe(recipe_content, word_to_category):
+    all_ingredients = []
+    for line in recipe_content:
+        parts = line.split(maxsplit=1)
+        if len(parts) == 2:
+            amount, ingredient = parts
+            original_ingredient = ingredient
+            ingredient_words = ingredient.lower().split()
+            mapped_ingredient = None
+            for i in range(len(ingredient_words), 0, -1):
+                potential_ingredient = ' '.join(ingredient_words[:i])
+                if potential_ingredient in word_to_category:
+                    mapped_ingredient = word_to_category[potential_ingredient]
+                    break
+            
+            if mapped_ingredient is None:
+                raise IngredientMappingError(f"The mapping for ingredient '{original_ingredient}' is missing")
+            
+            all_ingredients.append((amount, original_ingredient, mapped_ingredient))
+    return all_ingredients
+
+def insert_recipe_to_db(db_path, recipe_name, original_ingredients, mapped_ingredients, amounts, servings, link):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    formatted_original = ' '.join(original_ingredients)
+    formatted_mapped = ' '.join(mapped_ingredients)
+    formatted_amounts = ' '.join(amounts)
+
+    recipe_data = (
+        recipe_name,
+        formatted_original,
+        formatted_mapped,
+        formatted_amounts,
+        servings,
+        link
+    )
+
+    cursor.execute('''
+        INSERT INTO recipes (name, original_ingredients, ingredients, amount, servings, link)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', recipe_data)
+
+    conn.commit()
+    conn.close()
+
+
 # Create word to category mapping
 word_to_category = create_word_to_category_mapping(category_mapping)
 
@@ -377,21 +347,14 @@ word_to_category = create_word_to_category_mapping(category_mapping)
 recipe_file_path = 'recipe_ingredients.txt'  
 recipe_name, servings, link, recipe_content = read_recipe_file(recipe_file_path)
 
-# Process the recipe
-result, unmatched_lines = process_recipe(recipe_content, word_to_category)
+try:
+    # Process the recipe
+    result = process_recipe(recipe_content, word_to_category)
 
-# Check for unmatched ingredients
-if unmatched_lines:
-    print("Warning: The following lines contain ingredients that were not matched:")
-    for line in unmatched_lines:
-        print(f"  - {line}")
-    print("Please add these ingredients to the category mapping and try again.")
-    print("The recipe will not be added to the database.")
-else:
     # Prepare data for database insertion
-    original_ingredients = [item[0] for item in result]
-    mapped_ingredients = [item[1] for item in result]
-    amounts = [item[2] if item[2] else 'N/A' for item in result]
+    original_ingredients = [item[1] for item in result]
+    mapped_ingredients = [item[2] for item in result]
+    amounts = [item[0] for item in result]
 
     # Insert the recipe into the database
     db_path = 'groceries.db'
@@ -407,7 +370,20 @@ else:
     print("\nInserted recipe:")
     print(cursor.fetchone())
 
+    # Calculate nutrition values for the recipe
+    recipe_nutrition_calculator.calculate_recipe_nutrition(recipe_name)
+
+
     conn.close()
+
+except IngredientMappingError as e:
+    print(f"Error: {e}")
+    print("The recipe was not added to the database.")
+    sys.exit(1)
+
+
+
+
 
 
 
